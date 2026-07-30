@@ -5,7 +5,6 @@ import { Message, Conversation, GenerationMeta } from '../types';
 import { stripStreamingControlTokens, parseModelOutput } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
-import logger from '../utils/logger';
 
 function nextUpdatedAt(previousUpdatedAt?: string): string {
   const now = Date.now();
@@ -47,43 +46,6 @@ function speakableStreamingAnswer(streamingMessage: string, streamingReasoning: 
   const { useAppStore } = require('./appStore');
   return useAppStore.getState().settings?.thinkingEnabled ? '' : streamingMessage;
 }
-
-/**
- * Tell Pro the in-progress reply grew, so paired devices can show it live.
- *
- * Defined once because both the answer and the reasoning appenders fire it, and both must report
- * the SAME cumulative pair - a frame carrying one without the other would render a preview that
- * disagrees with the device generating it. Sending cumulative text (not deltas) is what lets Pro
- * throttle freely: any single frame is correct on its own.
- *
- * No-op in free builds. Nothing is emitted before the stream is bound to a conversation, since a
- * preview with no conversation has nowhere to render.
- */
-function emitStreamingUpdate(state: {
-  streamingForConversationId: string | null;
-  streamingMessage: string;
-  streamingReasoningContent: string;
-}): void {
-  // Once per stream, not per token. Distinguishes three faults that look identical from the
-  // Pro side: this never runs, it runs but no conversation is bound, or it runs and no hook
-  // is registered to receive it.
-  if (_loggedStreamEmit !== state.streamingForConversationId) {
-    _loggedStreamEmit = state.streamingForConversationId;
-    logger.log(
-      `[ChatStream] core emit conversation=${
-        state.streamingForConversationId?.slice(0, 8) ?? 'NONE-BAILING'
-      }`,
-    );
-  }
-  if (!state.streamingForConversationId) return;
-  callHook(HOOKS.syncStreamingUpdate, {
-    conversationId: state.streamingForConversationId,
-    content: state.streamingMessage,
-    reasoning: state.streamingReasoningContent,
-  });
-}
-
-let _loggedStreamEmit: string | null | undefined;
 
 /** Derive conversation title from the first user message. */
 function deriveTitle(currentTitle: string, role: string, content: string): string {
