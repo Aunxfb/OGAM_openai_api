@@ -233,6 +233,10 @@ export interface Message {
   audioPath?: string;
   waveformData?: number[];
   audioDurationSeconds?: number;
+  /** Stable cross-device id for a message (falls back to `id` when absent). */
+  uuid?: string;
+  /** Portable tool artifacts carried on a message for rendering. */
+  toolArtifacts?: Array<{ name: string; result: string }>;
 }
 
 export interface Conversation {
