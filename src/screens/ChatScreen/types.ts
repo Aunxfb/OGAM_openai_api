@@ -1,4 +1,5 @@
 import { Message } from '../../types';
+import { visibleMessages } from '../../utils/visibleMessages';
 export type ChatMessageItem = {
   id: string;
   role: 'assistant';
@@ -17,10 +18,23 @@ export type StreamingState = {
   isModelLoading?: boolean;
   loadingModelName?: string;
   isGeneratingForThisConversation?: boolean;
+  /** This device's mesh id, so a peer's runtime notices can be told apart from its own. */
+  localDeviceId?: string | null;
 };
 
 let _lastDisplayBranch = '';
 export function getDisplayMessages(
+  allMessages: Message[],
+  streaming: StreamingState,
+): (Message | ChatMessageItem)[] {
+  // The same rule the list rows use, so the thread and its preview never disagree.
+  return localDisplayMessages(
+    [...visibleMessages(allMessages, streaming.localDeviceId)],
+    streaming,
+  );
+}
+
+function localDisplayMessages(
   allMessages: Message[],
   streaming: StreamingState,
 ): (Message | ChatMessageItem)[] {

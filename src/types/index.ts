@@ -1,4 +1,6 @@
 // Model source and credibility types
+import type { MessageProvenance } from '../vendor/shared';
+
 export type ModelSource = 'lmstudio' | 'official' | 'verified-quantizer' | 'community';
 
 export interface ModelCredibility {
@@ -243,6 +245,8 @@ export interface Message {
   uuid?: string;
   /** Portable tool artifacts carried on a message for rendering. */
   toolArtifacts?: Array<{ name: string; result: string }>;
+  /** Which device wrote this message (null/undefined = local or unknown). */
+  provenance?: MessageProvenance;
 }
 
 export interface Conversation {

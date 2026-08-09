@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { AlertState, initialAlertState } from '../../components';
 import { useAppStore, useChatStore, useProjectStore, useRemoteServerStore } from '../../stores';
+import { useSyncIdentityStore } from '../../stores/syncIdentityStore';
 import { useActiveTextModel } from '../../hooks/useActiveTextModel';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import {
@@ -274,7 +275,8 @@ export const useChatScreen = () => {
   useChatModelStateSync({ activeModelInfo, activeModelId, activeModel, modelDeps, activeRemoteModel, activeRemoteTextModelId, isModelLoading, setSupportsVision, setSupportsToolCalling, setSupportsThinking });
 
   const isGeneratingForThisConversation = generatingConversationId != null && generatingConversationId === activeConversationId;
-  const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation, isModelLoading, loadingModelName: loadingModel?.name, isGeneratingForThisConversation });
+  const localDeviceId = useSyncIdentityStore(s => s.localDeviceId);
+  const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation, isModelLoading, loadingModelName: loadingModel?.name, isGeneratingForThisConversation, localDeviceId });
 
   useEffect(() => {
     const prev = lastMessageCountRef.current, curr = displayMessages.length;
