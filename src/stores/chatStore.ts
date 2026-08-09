@@ -82,6 +82,13 @@ interface ChatState {
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => Message;
   updateMessageContent: (conversationId: string, messageId: string, content: string) => void;
   updateMessageThinking: (conversationId: string, messageId: string, isThinking: boolean) => void;
+  /** Stamp the modality a USER message's turn was dispatched as (see #20: resend replays the
+   *  decision instead of re-deriving it from surviving replies). */
+  updateMessageTurnKind: (
+    conversationId: string,
+    messageId: string,
+    turnKind: NonNullable<Message['turnKind']>,
+  ) => void;
   updateMessageAudio: (conversationId: string, messageId: string, audio: { audioPath?: string; waveformData?: number[]; audioDurationSeconds?: number; isGeneratingAudio?: boolean; isAudioModeMessage?: boolean }) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   deleteMessagesAfter: (conversationId: string, messageId: string) => void;
@@ -201,6 +208,14 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: mapConversation(state.conversations, conversationId, (conv) =>
             updateMessageInConv(conv, messageId, (msg) => ({ ...msg, isThinking }))
+          ),
+        }));
+      },
+
+      updateMessageTurnKind: (conversationId, messageId, turnKind) => {
+        set((state) => ({
+          conversations: mapConversation(state.conversations, conversationId, (conv) =>
+            updateMessageInConv(conv, messageId, (msg) => ({ ...msg, turnKind }))
           ),
         }));
       },
