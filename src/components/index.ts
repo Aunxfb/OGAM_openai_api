@@ -14,6 +14,7 @@ export { CenteredAlert } from './CenteredAlert';
 ;
 export { ModelFailureCard } from './ModelFailureCard';
 export { ImageGenAdviceCard } from './ImageGenAdviceCard';
+export { MtpAdviceCard } from './MtpAdviceCard';
 export { ThinkingIndicator } from './ThinkingIndicator';
 ;
 ;
