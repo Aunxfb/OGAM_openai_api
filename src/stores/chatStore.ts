@@ -96,6 +96,8 @@ interface ChatState {
   setStreamingMessage: (content: string) => void;
   appendToStreamingMessage: (token: string) => void;
   appendToStreamingReasoningContent: (token: string) => void;
+  /** Start the next reasoning/answer segment without ending the reply or changing its identity. */
+  resetStreamingSegment: () => void;
   setIsStreaming: (streaming: boolean) => void;
   setIsThinking: (thinking: boolean) => void;
   finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number, generationMeta?: GenerationMeta) => void;
@@ -280,6 +282,10 @@ export const useChatStore = create<ChatState>()(
           isStreaming: true,
           isThinking: false,
         }));
+      },
+
+      resetStreamingSegment: () => {
+        set({ streamingMessage: '', streamingReasoningContent: '' });
       },
 
       setIsStreaming: (streaming) => {
