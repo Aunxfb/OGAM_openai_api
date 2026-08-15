@@ -2,8 +2,14 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message, Conversation, GenerationMeta } from '../types';
-import { stripStreamingControlTokens, parseModelOutput } from '../utils/messageContent';
+import {
+  stripStreamingControlTokens,
+} from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
+import {
+  finalizeStreamedReply,
+  type ReplyEnd,
+} from './chatStoreReplyFinalization';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 
 function nextUpdatedAt(previousUpdatedAt?: string): string {
@@ -100,6 +106,21 @@ interface ChatState {
   resetStreamingSegment: () => void;
   setIsStreaming: (streaming: boolean) => void;
   setIsThinking: (thinking: boolean) => void;
+  /**
+   * The text model is loading, and which one.
+   *
+   * Here rather than in ChatScreen's `useState`, which is where it used to live. A fact known only
+   * to a component is a fact sync cannot see: the phone showed "Loading Qwen3.5 2B" for tens of
+   * seconds while every paired device sat on "Preparing reply...", because the live-stream service
+   * subscribes to THIS store and there was nothing here to read. The image path never had the bug -
+   * its loading state was always a published phase.
+   */
+  isModelLoading: boolean;
+  loadingModelName: string | null;
+  setIsModelLoading: (loading: boolean) => void;
+  setLoadingModelName: (name: string | null) => void;
+  lastReplyEnd: ReplyEnd | null;
+  noteReplyEndHandled: () => void;
   finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number, generationMeta?: GenerationMeta) => void;
   clearStreamingMessage: () => void;
   getStreamingState: () => { conversationId: string | null; content: string; reasoningContent: string; isStreaming: boolean; isThinking: boolean };
@@ -108,16 +129,47 @@ interface ChatState {
   getConversationMessages: (conversationId: string) => Message[];
 }
 
+/** The streaming fields, named so a caller can say WHICH state it means rather than list it. */
+type StreamingFields = Pick<
+  ChatState,
+  | 'streamingMessage'
+  | 'streamingReasoningContent'
+  | 'streamingForConversationId'
+  | 'isStreaming'
+  | 'isThinking'
+>;
+
+/**
+ * No reply is forming. ONE definition, because that is one fact.
+ *
+ * It used to be written out in four places - the initial state, the start of a stream, the end of
+ * one, and a cancel - so every field added to the streaming state had to be remembered in all four,
+ * and whichever copy was missed would leak that field into the next reply. The type is a `Pick`, so
+ * adding a streaming field is a compile error here until it is given a cleared value.
+ */
+const MODEL_NOT_LOADING = {
+  isModelLoading: false,
+  loadingModelName: null,
+};
+
+const NO_REPLY_ENDED = { lastReplyEnd: null };
+
+const NO_REPLY_FORMING: StreamingFields = {
+  streamingMessage: '',
+  streamingReasoningContent: '',
+  streamingForConversationId: null,
+  isStreaming: false,
+  isThinking: false,
+};
+
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
       conversations: [],
       activeConversationId: null,
-      streamingMessage: '',
-      streamingReasoningContent: '',
-      streamingForConversationId: null,
-      isStreaming: false,
-      isThinking: false,
+      ...NO_REPLY_FORMING,
+      ...MODEL_NOT_LOADING,
+      ...NO_REPLY_ENDED,
 
       createConversation: (modelId, title, projectId) => {
         const id = generateId();
@@ -299,18 +351,20 @@ export const useChatStore = create<ChatState>()(
       finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta) => {
         const { streamingMessage, streamingReasoningContent, streamingForConversationId, addMessage } = get();
 
-        // Parse ONCE at this boundary through the single shared parser (SoC §A / DR1):
-        // split the raw stream into reasoning + a clean answer. The answer is stripped of
-        // control and tool-call markup BY CONSTRUCTION, so no raw markup can reach the
-        // stored message — and no renderer downstream re-parses message.content.
-        const streamReasoning = streamingReasoningContent.trim() || undefined;
-        const parsed = parseModelOutput(streamingMessage, streamReasoning);
-        const reasoningContent = parsed.reasoning ?? undefined;
-        const sanitizedMessage = parsed.answer;
-        if (streamingForConversationId === conversationId && (sanitizedMessage || reasoningContent)) {
+        const { persisted, content, reasoningContent } = finalizeStreamedReply({
+          streamingMessage,
+          streamingReasoningContent,
+          streamingForConversationId,
+          conversationId,
+        });
+        // End the ephemeral reply before the durable mutation leaves this device. Both use the same
+        // peer link. This order guarantees a receiver sees the final stream frame first and then the
+        // record that replaces it, never the reverse order that could recreate a retired preview.
+        set({ ...NO_REPLY_FORMING, lastReplyEnd: { conversationId, persisted } });
+        if (persisted) {
           addMessage(conversationId, {
             role: 'assistant',
-            content: sanitizedMessage,
+            content,
             reasoningContent,
             generationTimeMs,
             generationMeta,
@@ -326,14 +380,21 @@ export const useChatStore = create<ChatState>()(
       },
 
       clearStreamingMessage: () => {
+        // Nothing was shown and nothing is stored, so any peer preview for this reply is orphaned.
+        const conversationId = get().streamingForConversationId;
         set({
-          streamingMessage: '',
-          streamingReasoningContent: '',
-          streamingForConversationId: null,
-          isStreaming: false,
-          isThinking: false,
+          ...NO_REPLY_FORMING,
+          ...(conversationId
+            ? { lastReplyEnd: { conversationId, persisted: false } }
+            : {}),
         });
       },
+
+      noteReplyEndHandled: () => set(NO_REPLY_ENDED),
+
+      setIsModelLoading: (loading: boolean) => set({ isModelLoading: loading }),
+      setLoadingModelName: (name: string | null) =>
+        set({ loadingModelName: name }),
 
       getStreamingState: () => {
         const state = get();
@@ -343,6 +404,8 @@ export const useChatStore = create<ChatState>()(
           reasoningContent: state.streamingReasoningContent,
           isStreaming: state.isStreaming,
           isThinking: state.isThinking,
+          isModelLoading: state.isModelLoading,
+          loadingModelName: state.loadingModelName,
         };
       },
 
