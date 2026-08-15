@@ -47,6 +47,8 @@ type OnboardingChecklist = {
 
 type AppSettings = {
   systemPrompt: string; temperature: number; maxTokens: number;
+  /** Maximum tool calls per turn (Maximum Tool Calls setting, default 25). */
+  maxToolCalls: number;
   topP: number; repeatPenalty: number; contextLength: number;
   nThreads: number; nBatch: number;
   imageGenerationMode: ImageGenerationMode; autoDetectMethod: AutoDetectMethod;
@@ -201,10 +203,11 @@ const DEFAULT_CHECKLIST: OnboardingChecklist = {
   triedImageGen: false, exploredSettings: false, createdProject: false,
 };
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
   temperature: 0.7,
   maxTokens: 1024,
+  maxToolCalls: 25,
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 4096,
