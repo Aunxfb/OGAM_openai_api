@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, FlatList, Text, Keyboard, Platform, StyleSheet } from 'react-native';
+import { View, FlatList, Text, Keyboard, Platform } from 'react-native';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
@@ -120,8 +120,6 @@ const ModelStatusBar: React.FC<{ loading: boolean; classifying: boolean; modelNa
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   flatListRef, isNearBottomRef, chat, styles, colors, handleScroll, renderItem, chatSpotlight,
 }) => {
-  // Hide FlatList until initial layout + scroll is complete to prevent visible scroll jump
-  const [isListReady, setIsListReady] = useState(false);
   const hasScrolledRef = React.useRef(false);
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -192,8 +190,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
         })()
       ) : (
         <FlatList
+          testID="chat-message-list"
           ref={flatListRef}
-          style={isListReady ? undefined : hiddenStyle.hidden}
           data={chat.displayMessages}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
@@ -205,10 +203,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               // Initial layout: force scroll to bottom regardless of isNearBottom
               flatListRef.current?.scrollToEnd({ animated: false });
               hasScrolledRef.current = true;
-              // Reveal after a frame so the scroll position settles
-              requestAnimationFrame(() => {
-                requestAnimationFrame(() => setIsListReady(true));
-              });
             } else if (isNearBottomRef.current) {
               flatListRef.current?.scrollToEnd({ animated: false });
             }
@@ -334,7 +328,3 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     </>
   );
 };
-
-const hiddenStyle = StyleSheet.create({
-  hidden: { opacity: 0 },
-});
