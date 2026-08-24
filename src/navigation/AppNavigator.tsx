@@ -217,6 +217,9 @@ export const AppNavigator: React.FC = () => {
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
           animation: 'slide_from_right',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+          gestureDirection: 'horizontal',
         }}
       >
         <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
@@ -228,7 +231,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen
           name="ProjectEdit"
           component={ProjectEditScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
         />
         <RootStack.Screen name="KnowledgeBase" component={KnowledgeBaseScreen} />
         <RootStack.Screen name="DocumentPreview" component={DocumentPreviewScreen} />
@@ -251,12 +254,12 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
         />
         <RootStack.Screen
           name="Gallery"
           component={GalleryScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
         />
         {registeredScreens.map(s => (
           <RootStack.Screen key={s.name} name={s.name as any} component={s.component} />

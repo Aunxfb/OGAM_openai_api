@@ -1,17 +1,25 @@
 import React, { useCallback, useMemo } from 'react';
 import { Linking, Text } from 'react-native';
-import Markdown from '@ronradtke/react-native-markdown-display';
+import Markdown, {
+  MarkdownIt,
+} from '@ronradtke/react-native-markdown-display';
+import {
+  preprocessChatMarkdown,
+  safeChatExternalUrl,
+} from '../vendor/shared';
 import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING, FONTS } from '../constants';
 
+const chatMarkdownParser = MarkdownIt({ typographer: true, linkify: true });
+
 /**
  * Escape asterisks used as multiplication operators (digit*digit) so
  * markdown-it doesn't treat them as emphasis markers.
- * Lookahead handles chains like 5*5*5*5 in a single pass.
+ * Single source of truth lives in the vendor seam (no ../shared dep).
  */
 export function preprocessMarkdown(text: string): string {
-  return text.replaceAll(/(\d)\*(?=\d)/g, String.raw`$1\*`);
+  return preprocessChatMarkdown(text);
 }
 
 /** Custom link rule — renders as inline Text so it wraps correctly inside list items */
@@ -71,7 +79,8 @@ export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
   );
 
   const handleLinkPress = useCallback((url: string) => {
-    Linking.openURL(url);
+    const safeUrl = safeChatExternalUrl(url);
+    if (safeUrl) void Linking.openURL(safeUrl);
     return false;
   }, []);
 
@@ -82,7 +91,12 @@ export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
   );
 
   return (
-    <Markdown style={markdownStyles} onLinkPress={handleLinkPress} rules={rules}>
+    <Markdown
+      style={markdownStyles}
+      markdownit={chatMarkdownParser}
+      onLinkPress={handleLinkPress}
+      rules={rules}
+    >
       {processed}
     </Markdown>
   );
