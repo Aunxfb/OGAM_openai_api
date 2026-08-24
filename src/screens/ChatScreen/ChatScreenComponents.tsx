@@ -120,12 +120,11 @@ export const ChatHeader: React.FC<{
               {activeProject ? activeProject.name : 'Default'}
             </Text>
           </TouchableOpacity>
-          {/* Pro-only: Chat/Voice mode dropdown, on the same line as Models ·
-              project, pushed to the right. Empty slot in free builds. */}
-          {(() => { const ModeToggle = getSlot(SLOTS.chatInputModeToggle); return ModeToggle ? <View style={styles.modeToggleWrap}><ModeToggle /></View> : null; })()}
         </View>
       </View>
       <View style={styles.headerActions}>
+        {/* Pro-only Voice mode sits beside the conversation filters. Empty in free builds. */}
+        {(() => { const ModeToggle = getSlot(SLOTS.chatInputModeToggle); return ModeToggle ? <ModeToggle /> : null; })()}
         <AttachStep index={16}>
           <TouchableOpacity style={styles.iconButton} onPress={() => setShowSettingsPanel(true)} testID="chat-settings-icon">
             <Icon name="sliders" size={16} color={colors.textSecondary} />
