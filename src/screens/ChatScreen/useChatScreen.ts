@@ -285,6 +285,7 @@ export const useChatScreen = () => {
     setSupportsVision,
     setSupportsToolCalling,
     setSupportsThinking,
+    prepareSelectedModel: route.params?.conversationId == null,
   });
 
   const isGeneratingForThisConversation =
