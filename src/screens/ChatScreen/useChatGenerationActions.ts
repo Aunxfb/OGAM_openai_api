@@ -15,6 +15,7 @@ import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
 import { abortPreload } from '../../services/modelPreloader';
 import { modelResidencyManager } from '../../services/modelResidency';
 import { reportModelFailure } from '../../services/modelFailureHandler';
+import { remoteToolCapabilityIssue } from '../../services/toolCapabilityPreflight';
 import { embeddingService } from '../../services/rag/embedding';
 import { useChatStore, useProjectStore, useRemoteServerStore, useAppStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
@@ -292,6 +293,8 @@ async function generateWithCompactionRetry(
 ): Promise<boolean> {
   const extCount = getToolExtensions().reduce((n, e) => n + e.enabledToolCount(), 0);
   logger.log(`[GEN-SM] generateWithCompactionRetry conv=${opts.id} msgs=${opts.messages.length} tools=${enabledTools.length} ext=${extCount}`);
+  const capabilityIssue = remoteToolCapabilityIssue(enabledTools.length + extCount);
+  if (capabilityIssue) throw new Error(capabilityIssue);
   const gen = (msgs: Message[]) => (enabledTools.length > 0 || extCount > 0)
     ? generationService.generateWithTools(opts.id, msgs, { enabledToolIds: enabledTools, projectId })
     : generationService.generateResponse(opts.id, msgs);
