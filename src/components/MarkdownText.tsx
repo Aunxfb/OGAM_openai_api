@@ -69,13 +69,14 @@ const selectableRules = {
 interface MarkdownTextProps {
   children: string;
   dimmed?: boolean;
+  compact?: boolean;
 }
 
-export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
+export function MarkdownText({ children, dimmed, compact }: MarkdownTextProps) {
   const { colors } = useTheme();
   const markdownStyles = useMemo(
-    () => createMarkdownStyles(colors, dimmed),
-    [colors, dimmed],
+    () => createMarkdownStyles(colors, dimmed, compact),
+    [colors, compact, dimmed],
   );
 
   const handleLinkPress = useCallback((url: string) => {
@@ -102,14 +103,20 @@ export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
   );
 }
 
-function createMarkdownStyles(colors: ThemeColors, dimmed?: boolean) {
+function createMarkdownStyles(
+  colors: ThemeColors,
+  dimmed?: boolean,
+  compact?: boolean,
+) {
   const textColor = dimmed ? colors.textSecondary : colors.text;
+  const bodyTypography = compact ? TYPOGRAPHY.bodySmall : TYPOGRAPHY.body;
+  const lineHeight = compact ? 18 : 20;
 
   return {
     body: {
-      ...TYPOGRAPHY.body,
+      ...bodyTypography,
       color: textColor,
-      lineHeight: 20,
+      lineHeight,
       flexShrink: 1,
     },
     heading1: {
@@ -233,7 +240,7 @@ function createMarkdownStyles(colors: ThemeColors, dimmed?: boolean) {
     },
     paragraph: {
       marginTop: 0,
-      marginBottom: SPACING.sm,
+      marginBottom: compact ? 0 : SPACING.sm,
     },
     // Image (unlikely in LLM text but handle gracefully)
     image: {
