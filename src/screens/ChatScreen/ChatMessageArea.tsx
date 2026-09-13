@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, FlatList, Text, Keyboard, Platform } from 'react-native';
+import { View, FlatList, Text, Platform } from 'react-native';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
@@ -218,7 +218,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           scrollEventThrottle={16}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          onTouchStart={() => Keyboard.dismiss()}
           maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 100 }}
           removeClippedSubviews={Platform.OS !== 'android'}
         />
