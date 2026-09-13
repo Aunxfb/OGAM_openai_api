@@ -48,7 +48,7 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
   onMenuOpen,
   metaExtra,
 }) => (
-  <View style={styles.metaRow}>
+  <View testID="message-meta-row" style={styles.metaRow}>
     <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
     {message.generationTimeMs != null && message.role === 'assistant' && (
       <Text style={styles.generationTime}>
@@ -197,6 +197,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       </View>
 
+      <MessageMetaRow
+        message={message}
+        styles={styles}
+        isStreaming={isStreaming}
+        showActions={showActions}
+        onMenuOpen={onMenuOpen}
+        metaExtra={metaExtra}
+      />
+
       {!toolsBeforeActiveThinking && (
         <SyncedToolArtifacts
           message={message}
@@ -222,19 +231,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      <MessageMetaRow
-        message={message}
-        styles={styles}
-        isStreaming={isStreaming}
-        showActions={showActions}
-        onMenuOpen={onMenuOpen}
-        metaExtra={metaExtra}
-      />
-
       {showGenerationDetails && !isUser && message.generationMeta && (
         <GenerationMeta
+          messageId={message.id}
           generationMeta={message.generationMeta}
           styles={styles}
+          colors={colors}
         />
       )}
     </TouchableOpacity>
