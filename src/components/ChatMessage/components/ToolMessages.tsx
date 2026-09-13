@@ -27,6 +27,8 @@ function getToolIcon(toolName?: string): string {
       return 'clock';
     case 'get_device_info':
       return 'smartphone';
+    case 'model_fallback':
+      return 'shuffle';
     default:
       return 'tool';
   }
@@ -45,8 +47,10 @@ function getToolLabel(toolName?: string, content?: string): string {
       return content || 'Calculated';
     case 'get_current_datetime':
       return 'Retrieved date/time';
-    case 'get_device_info':
-      return 'Retrieved device info';
+      case 'get_device_info':
+        return 'Retrieved device info';
+    case 'model_fallback':
+      return 'Model changed';
     default:
       return toolName || 'Tool result';
   }
