@@ -21,22 +21,23 @@ interface MessageOverlaysProps {
   displayContent: string;
   alertState: AlertState;
   onCloseActionMenu: () => void;
-  onChangeEditText: (text: string) => void;
+  onCloseSelectText: () => void;
   onCopy: () => void;
   onEdit: () => void;
   onRetry: () => void;
   onGenerateImage: () => void;
   onSpeak: () => void;
-  onSaveEdit: () => void;
+  onSelectText: () => void;
+  onSaveEdit: (text: string) => void;
   onCancelEdit: () => void;
   onCloseAlert: () => void;
 }
 
 export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
-  message, styles, colors, showActionMenu, isEditing, isUser,
-  canEdit, canRetry, canGenerateImage, canSpeak, displayContent,
-  alertState, onCloseActionMenu, onChangeEditText, onCopy, onEdit,
-  onRetry, onGenerateImage, onSpeak, onSaveEdit, onCancelEdit, onCloseAlert,
+  message, styles, colors, showActionMenu, showSelectText, isEditing, isUser,
+  canEdit, canRetry, canGenerateImage, canSpeak, showSelectTextAction, displayContent,
+  alertState, onCloseActionMenu, onCloseSelectText, onCopy, onEdit,
+  onRetry, onGenerateImage, onSpeak, onSelectText, onSaveEdit, onCancelEdit, onCloseAlert,
 }) => (
   <>
     <ActionMenuSheet
@@ -57,8 +58,7 @@ export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
     <EditSheet
       visible={isEditing}
       onClose={onCancelEdit}
-      defaultValue={isUser ? message.content : displayContent}
-      onChangeText={onChangeEditText}
+      defaultValue={message.content}
       onSave={onSaveEdit}
       onCancel={onCancelEdit}
       resendsAfterSave={isUser}

@@ -271,7 +271,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(message.content);
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
@@ -299,19 +298,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   };
 
   const handleEdit = () => {
-    setEditedContent(isUser ? message.content : displayContent);
     setShowActionMenu(false);
     setTimeout(() => setIsEditing(true), 350);
   };
 
-  const handleSaveEdit = () => {
-    const trimmed = editedContent.trim();
-    if (trimmed !== (isUser ? message.content : displayContent)) onEdit?.(message, trimmed);
+  const handleSelectText = () => {
+    setShowActionMenu(false);
+    // Let the action sheet finish closing before opening the select-text sheet.
+    setTimeout(() => setShowSelectText(true), 350);
+  };
+
+  const handleSaveEdit = (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed !== message.content) onEdit?.(message, trimmed);
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
-    setEditedContent(isUser ? message.content : displayContent);
     setIsEditing(false);
   };
 
@@ -407,7 +410,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         displayContent={displayContent}
         alertState={alertState}
         onCloseActionMenu={() => setShowActionMenu(false)}
-        onChangeEditText={setEditedContent}
+        onCloseSelectText={() => setShowSelectText(false)}
         onCopy={handleCopy}
         onEdit={handleEdit}
         onRetry={handleRetry}

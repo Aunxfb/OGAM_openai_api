@@ -2,7 +2,7 @@ import React from 'react';
 import { ChatMessage } from '../../components';
 import { prepareMessageForSpeech } from '../../utils/messageContent';
 import { Message } from '../../types';
-import { useUiModeStore } from '../../stores';
+import { useChatStore, useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { ChatMessageItem } from './useChatScreen';
 
@@ -115,4 +115,30 @@ export function messageRendererPropsEqual(prev: MessageRendererProps, next: Mess
     && prev.showGenerationDetails === next.showGenerationDetails;
 }
 
-export const MessageRenderer = React.memo(MessageRendererInner, messageRendererPropsEqual);
+const StableMessageRenderer = React.memo(
+  MessageRendererInner,
+  messageRendererPropsEqual,
+);
+
+const LiveStreamMessageRenderer: React.FC<MessageRendererProps> = props => {
+  const content = useChatStore(state => state.streamingMessage);
+  const reasoningContent = useChatStore(state => state.streamingReasoningContent);
+  const item = React.useMemo(() => ({
+    ...props.item,
+    content,
+    reasoningContent: reasoningContent || undefined,
+  }), [props.item, content, reasoningContent]);
+  return <StableMessageRenderer {...props} item={item} />;
+};
+
+const MessageRendererDispatch: React.FC<MessageRendererProps> = props =>
+  props.item.id === 'streaming' ? (
+    <LiveStreamMessageRenderer {...props} />
+  ) : (
+    <StableMessageRenderer {...props} />
+  );
+
+export const MessageRenderer = React.memo(
+  MessageRendererDispatch,
+  messageRendererPropsEqual,
+);

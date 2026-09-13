@@ -26,7 +26,9 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   onAudioAttachmentRef.current = onAudioAttachment;
   const onAutoSendRef = useRef(onAutoSend);
   onAutoSendRef.current = onAutoSend;
-  const { downloadedModelId } = useWhisperStore();
+  const downloadedModelId = useWhisperStore(state => state.downloadedModelId);
+  const transcriptionLanguage = useWhisperStore(state => state.transcriptionLanguage);
+  const remoteTranscriptionAvailable = useRemoteTranscriptionAvailable();
   const [isDirectRecording, setIsDirectRecording] = useState(false);
   const [isAudioModeRecording, setIsAudioModeRecording] = useState(false);
   const [isTranscribingFile, setIsTranscribingFile] = useState(false);
