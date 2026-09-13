@@ -83,9 +83,13 @@ type EditParams = {
 };
 
 export async function handleEditMessageFn(genDeps: GenerationDeps, p: EditParams): Promise<void> {
+  if (!p.activeConversationId) return;
+  if (p.message.role === 'assistant') {
+    p.updateMessageContent(p.activeConversationId, p.message.id, p.newContent);
+    return;
+  }
   // Same as retry: no model loaded → alert instead of a silent no-op.
   if (!p.hasActiveModel) { genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
-  if (!p.activeConversationId) return;
   // Preserve the turn's modality across an edit: an edited image prompt re-runs the image pipeline
   // (read BEFORE the update/delete strips the reply that records it), not a re-classification.
   const recordedKind = recordedTurnKind(p.activeConversation?.messages || [], p.message.id);
