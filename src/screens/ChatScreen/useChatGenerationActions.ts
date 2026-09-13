@@ -479,11 +479,13 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
       deps.setAlertState({
         ...showAlert(
           'Context window full',
-          'The conversation is too long for this model\'s context window.\n\nIncrease the context limit in Settings, reduce the number of enabled tools, or start a new chat.',
+          'This request did not fit in the loaded context window. A new chat can also hit this limit when the message or tool definitions are large.\n\nIncrease Context Length in Settings and reload, reduce enabled tools, or shorten the message. Max Tokens only limits the reply.',
           [
             {
               text: 'Settings',
-              onPress: () => { deps.setAlertState({ visible: false, title: '', message: '', buttons: [] }); deps.setShowSettingsPanel?.(true); },
+              // The alert is a native modal; wait for its close animation
+              // before presenting the in-chat settings sheet on iOS.
+              onPress: () => { deps.setAlertState({ visible: false, title: '', message: '', buttons: [] }); setTimeout(() => deps.setShowSettingsPanel?.(true), 300); },
             },
             {
               text: 'New chat',
@@ -723,11 +725,13 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
       deps.setAlertState({
         ...showAlert(
           'Context window full',
-          'The conversation is too long for this model\'s context window.\n\nIncrease the context limit in Settings, reduce the number of enabled tools, or start a new chat.',
+          'This request did not fit in the loaded context window. A new chat can also hit this limit when the message or tool definitions are large.\n\nIncrease Context Length in Settings and reload, reduce enabled tools, or shorten the message. Max Tokens only limits the reply.',
           [
             {
               text: 'Settings',
-              onPress: () => { deps.setAlertState({ visible: false, title: '', message: '', buttons: [] }); deps.setShowSettingsPanel?.(true); },
+              // The alert is a native modal; wait for its close animation
+              // before presenting the in-chat settings sheet on iOS.
+              onPress: () => { deps.setAlertState({ visible: false, title: '', message: '', buttons: [] }); setTimeout(() => deps.setShowSettingsPanel?.(true), 300); },
             },
             {
               text: 'New chat',
