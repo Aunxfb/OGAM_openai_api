@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist } from 'zustand/middleware';
 import { Message, Conversation, GenerationMeta } from '../types';
 import {
   stripStreamingControlTokens,
 } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
+import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
   finalizeStreamedReply,
   type ReplyEnd,
@@ -162,6 +162,18 @@ const NO_REPLY_FORMING: StreamingFields = {
   isThinking: false,
 };
 
+/** Durable chat state (subset written to storage). */
+interface PersistedChatState {
+  conversations: Conversation[];
+  activeConversationId: string | null;
+}
+
+const chatStorage = createHydrationGatedStorage<PersistedChatState>(
+  undefined,
+  (previous, next) =>
+    previous.conversations === next.conversations &&
+    previous.activeConversationId === next.activeConversationId,
+);
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -435,8 +447,9 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'local-llm-chat-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
+      storage: chatStorage.storage,
+      onRehydrateStorage: () => () => chatStorage.markHydrated(),
+      partialize: (state): PersistedChatState => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
       }),
