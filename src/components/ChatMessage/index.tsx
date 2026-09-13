@@ -174,6 +174,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       )}
 
+      <View
+        testID={message.isThinking ? undefined : 'message-bubble'}
+        style={message.isThinking ? undefined : bubbleStyle}
+      >
+
       <View testID="message-bubble" style={bubbleStyle}>
         {hasAttachments && (
           <MessageAttachments
@@ -197,14 +202,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       </View>
 
-      <MessageMetaRow
-        message={message}
-        styles={styles}
-        isStreaming={isStreaming}
-        showActions={showActions}
-        onMenuOpen={onMenuOpen}
-        metaExtra={metaExtra}
-      />
+      {!message.isThinking && (
+        <MessageMetaRow
+          message={message}
+          styles={styles}
+          isStreaming={isStreaming}
+          showActions={showActions}
+          onMenuOpen={onMenuOpen}
+          metaExtra={metaExtra}
+        />
+      )}
 
       {!toolsBeforeActiveThinking && (
         <SyncedToolArtifacts
