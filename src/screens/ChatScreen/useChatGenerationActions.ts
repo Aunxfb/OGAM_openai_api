@@ -19,7 +19,7 @@ import { remoteToolCapabilityIssue } from '../../services/toolCapabilityPrefligh
 import { embeddingService } from '../../services/rag/embedding';
 import { useChatStore, useProjectStore, useRemoteServerStore, useAppStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
-import { Message, MediaAttachment, Project, DownloadedModel, RemoteModel, CacheType } from '../../types';
+import { Message, MediaAttachment, Project, DownloadedModel, RemoteModel, CacheType, GenerationMeta } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
 type SetState<T> = Dispatch<SetStateAction<T>>;
@@ -276,28 +276,69 @@ export async function handleImageGenerationFn(
   generationService.drainQueue();
 }
 export type StartGenerationCall = { setDebugInfo: SetState<any>; targetConversationId: string; messageText: string };
-async function prepareContext(setDebugInfo: SetState<any>, systemPrompt: string, messages: Message[]): Promise<void> {
+async function prepareContext(
+  setDebugInfo: SetState<any>,
+  systemPrompt: string,
+  messages: Message[],
+): Promise<Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined> {
+  const estimatedPromptTokens = Math.ceil(
+    JSON.stringify(messages.map(m => ({ role: m.role, content: m.content }))).length / 4,
+  );
+  const remoteStore = useRemoteServerStore.getState();
+  if (remoteStore.activeServerId) {
+    const server = remoteStore.getActiveServer();
+    const model = remoteStore.getActiveRemoteTextModel();
+    const contextWindowTokens =
+      (!remoteStore.activeRemoteTextModelId || server?.mediaModels?.text === remoteStore.activeRemoteTextModelId
+        ? server?.textContextWindowTokens
+        : undefined) ?? model?.capabilities.maxContextLength;
+    setDebugInfo(null);
+    return contextWindowTokens && contextWindowTokens > 0
+      ? {
+          contextPromptTokens: estimatedPromptTokens,
+          contextWindowTokens,
+          contextEstimate: true,
+        }
+      : undefined;
+  }
   try {
     const contextDebug = await llmService.getContextDebugInfo(messages);
     setDebugInfo({ systemPrompt, ...contextDebug });
     if (contextDebug.truncatedCount > 0 || contextDebug.contextUsagePercent > 70) {
       await llmService.clearKVCache(false).catch(() => { });
     }
-  } catch { /* ignore */ }
+    const contextWindowTokens = contextDebug.maxContextLength || useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
+    return {
+      contextPromptTokens: contextDebug.estimatedTokens || estimatedPromptTokens,
+      contextWindowTokens,
+      contextEstimate: true,
+    };
+  } catch {
+    const contextWindowTokens = useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
+    return {
+      contextPromptTokens: estimatedPromptTokens,
+      contextWindowTokens,
+      contextEstimate: true,
+    };
+  }
 }
 /** Run generation; if context is full, compact old messages and retry once. */
 async function generateWithCompactionRetry(
-  opts: { id: string; prompt: string; messages: Message[] },
+  opts: { id: string; prompt: string; messages: Message[]; setDebugInfo?: SetState<any> },
   enabledTools: string[],
   projectId?: string,
 ): Promise<boolean> {
+  const { setDebugInfo } = opts;
   const extCount = getToolExtensions().reduce((n, e) => n + e.enabledToolCount(), 0);
   logger.log(`[GEN-SM] generateWithCompactionRetry conv=${opts.id} msgs=${opts.messages.length} tools=${enabledTools.length} ext=${extCount}`);
   const capabilityIssue = remoteToolCapabilityIssue(enabledTools.length + extCount);
   if (capabilityIssue) throw new Error(capabilityIssue);
-  const gen = (msgs: Message[]) => (enabledTools.length > 0 || extCount > 0)
-    ? generationService.generateWithTools(opts.id, msgs, { enabledToolIds: enabledTools, projectId })
-    : generationService.generateResponse(opts.id, msgs);
+  const gen = async (msgs: Message[]) => {
+    const contextUsage = setDebugInfo ? await prepareContext(setDebugInfo, opts.prompt, msgs) : undefined;
+    return enabledTools.length > 0 || extCount > 0
+      ? generationService.generateWithTools(opts.id, msgs, { enabledToolIds: enabledTools, projectId, contextUsage })
+      : generationService.generateResponse(opts.id, msgs, undefined, contextUsage);
+  };
   let turnInterrupted = false; // PER-TURN stop truth from the loop outcome (returned to the caller)
   try { const outcome = await gen(opts.messages); turnInterrupted = !!(outcome as { interrupted?: boolean } | void)?.interrupted; } catch (error: any) {
     if (!contextCompactionService.isContextFullError(error)) throw error;
@@ -410,9 +451,8 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     { isRemote },
   );
   const messagesForContext = buildMessagesForContext(targetConversationId, messageText, systemPrompt);
-  await prepareContext(setDebugInfo, systemPrompt, messagesForContext);
   try {
-    turnStopped = await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: messagesForContext }, activeTools, conversation?.projectId);
+    turnStopped = await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: messagesForContext, setDebugInfo }, activeTools, conversation?.projectId);
   } catch (error: any) {
     const msg = error?.message || error?.toString?.() || 'Failed to generate response';
     logger.error('[ChatGen] Generation failed:', msg, error);
@@ -603,7 +643,7 @@ export async function executeDeleteConversationFn(
 }
 export type RegenerateCall = { setDebugInfo: SetState<any>; userMessage: Message; recordedKind?: TurnKind };
 export async function regenerateResponseFn(deps: GenerationDeps, call: RegenerateCall): Promise<void> {
-  const { userMessage, recordedKind } = call;
+  const { setDebugInfo, userMessage, recordedKind } = call;
   logger.log(`[RESEND-SM] regenerate start userMsg=${userMessage.id} conv=${deps.activeConversationId} hasActiveModel=${deps.hasActiveModel} isRemote=${deps.activeModelInfo?.isRemote} hasActiveModelObj=${!!deps.activeModel} recordedKind=${recordedKind ?? 'none'}`);
   if (!deps.activeConversationId || !deps.hasActiveModel) { logger.log('[RESEND-SM] regenerate BAIL: no conv or no active model'); return; }
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
@@ -657,7 +697,7 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
   );
   const { prefix, filtered } = applyCompactionPrefix(conversation, systemPrompt, messagesUpToUser);
   try {
-    await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: [...prefix, ...filtered] }, activeTools, conversation?.projectId);
+    await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: [...prefix, ...filtered], setDebugInfo }, activeTools, conversation?.projectId);
   } catch (error: any) {
     const msg = error?.message || 'Failed to generate response';
     const isContextOverflow = msg.includes('too long') || msg.includes('Exceeding the maximum number of tokens') || msg.includes('Input token ids');

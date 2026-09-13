@@ -8,6 +8,16 @@
 /** Provider types supported by the system */
 type RemoteProviderType = 'openai-compatible' | 'anthropic';
 
+/** Optional OpenAI-compatible media models served by this endpoint. */
+export interface RemoteMediaModelIds {
+  text?: string;
+  image?: string;
+  transcription?: string;
+  voice?: string;
+}
+
+export type RemoteModelCategory = keyof RemoteMediaModelIds;
+
 /** Remote server configuration */
 export interface RemoteServer {
   /** Unique identifier for this server */
@@ -28,6 +38,10 @@ export interface RemoteServer {
   isHealthy?: boolean;
   /** User-defined notes or description */
   notes?: string;
+  /** Selected model IDs for each OpenAI-compatible endpoint. */
+  mediaModels?: RemoteMediaModelIds;
+  /** Context window for the selected remote text model, if set by the user. */
+  textContextWindowTokens?: number;
 }
 
 /** Model discovered from a remote server */
