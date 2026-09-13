@@ -52,6 +52,9 @@ export interface GenerationRequest {
   messages: Message[];
   onFirstToken?: () => void;
   contextUsage?: Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'>;
+  /** A fallback keeps the same in-flight turn and owns its error cleanup. */
+  prepared?: boolean;
+  preservePartialOnError?: boolean;
 }
 
 export interface GenerationWithToolsRequest {
@@ -64,6 +67,8 @@ export interface GenerationWithToolsRequest {
     onToolCallComplete?: (name: string, result: ToolResult) => void;
     onFirstToken?: () => void;
     contextUsage?: GenerationRequest['contextUsage'];
+    prepared?: boolean;
+    preservePartialOnError?: boolean;
   };
 }
 
@@ -126,7 +131,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     return {
       gpu: false,
       gpuBackend: 'Remote',
-      modelName: activeServer?.name || 'Remote Model',
+      modelName: remoteStore.getActiveRemoteTextModel()?.name || remoteStore.activeRemoteTextModelId || activeServer?.name || 'Remote Model',
       tokenCount: estimatedTokens,
       tokensPerSecond,
       timeToFirstToken: svc.remoteTimeToFirstToken,
@@ -394,6 +399,7 @@ async function runLiteRTResponseImpl(
         onError: (err: Error) => {
           if (svc.abortRequested) return;
           logger.error('[LiteRT] sendMessage error:', err.message);
+          if (req.preservePartialOnError === false) throw err;
           keepShownPartialOnError(svc, conversationId); // keep the partial the user already saw
         },
       },
@@ -401,7 +407,7 @@ async function runLiteRTResponseImpl(
     );
   } catch (error: any) {
     if (svc.abortRequested) return;
-    keepShownPartialOnError(svc, conversationId);
+    if (req.preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }
@@ -411,7 +417,7 @@ export async function generateResponseImpl(
   req: GenerationRequest,
 ): Promise<void> {
   const { conversationId, messages, onFirstToken } = req;
-  if (!(await prepareGenerationImpl(svc, conversationId))) return;
+  if (!req.prepared && !(await prepareGenerationImpl(svc, conversationId))) return;
   svc.contextUsage = req.contextUsage;
 
   if (isLiteRTActive()) {
@@ -468,7 +474,7 @@ export async function generateResponseImpl(
   } catch (error) {
     if (svc.abortRequested) return;
     logger.error('[GenerationService] Generation error:', error);
-    keepShownPartialOnError(svc, conversationId);
+    if (req.preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }
