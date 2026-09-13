@@ -40,8 +40,6 @@ export interface RemoteServer {
   notes?: string;
   /** Selected model IDs for each OpenAI-compatible endpoint. */
   mediaModels?: RemoteMediaModelIds;
-  /** Context window for the selected remote text model, if set by the user. */
-  textContextWindowTokens?: number;
 }
 
 /** Model discovered from a remote server */
