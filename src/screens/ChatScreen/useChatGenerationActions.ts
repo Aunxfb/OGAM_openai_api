@@ -474,7 +474,7 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   } catch (error: any) {
     const msg = error?.message || error?.toString?.() || 'Failed to generate response';
     logger.error('[ChatGen] Generation failed:', msg, error);
-    const isContextOverflow = msg.includes('too long') || msg.includes('Exceeding the maximum number of tokens') || msg.includes('Input token ids');
+    const isContextOverflow = contextCompactionService.isContextFullError(error) || msg.includes('too long') || msg.includes('Exceeding the maximum number of tokens') || msg.includes('Input token ids');
     if (isContextOverflow) {
       deps.setAlertState({
         ...showAlert(
@@ -718,7 +718,7 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
     await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: [...prefix, ...filtered], setDebugInfo }, activeTools, conversation?.projectId);
   } catch (error: any) {
     const msg = error?.message || 'Failed to generate response';
-    const isContextOverflow = msg.includes('too long') || msg.includes('Exceeding the maximum number of tokens') || msg.includes('Input token ids');
+    const isContextOverflow = contextCompactionService.isContextFullError(error) || msg.includes('too long') || msg.includes('Exceeding the maximum number of tokens') || msg.includes('Input token ids');
     if (isContextOverflow) {
       deps.setAlertState({
         ...showAlert(
