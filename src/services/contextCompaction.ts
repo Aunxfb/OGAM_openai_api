@@ -159,7 +159,7 @@ class ContextCompactionService {
         chat.updateCompactionState(conversationId, summary, cutoffMessageId);
         chat.addMessage(conversationId, {
           role: 'assistant',
-          content: 'Compacted',
+          content: 'Compacted conversation to make room for more messages.',
           isSystemInfo: true,
         });
       }
