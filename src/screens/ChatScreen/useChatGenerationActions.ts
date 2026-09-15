@@ -643,9 +643,14 @@ export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promis
 export async function handleStopFn(deps: Pick<GenerationDeps, 'isGeneratingImage'>): Promise<void> {
   generationSession.end('stopped');
   callHook(HOOKS.audioStop); // abort must silence TTS too — buffered-ahead sentences keep playing otherwise
-  try { await generationService.stopGeneration().catch(() => { }); }
+  // The image X is also the remote stop signal. Start all cancellations now; waiting for the text
+  // engine first leaves paired work showing progress while that stop call drains.
+  const stops: Promise<unknown>[] = [generationService.stopGeneration()];
+  const taskStop = callHook<Promise<void>>(HOOKS.taskStopActive);
+  if (taskStop !== undefined) stops.push(taskStop);
+  if (deps.isGeneratingImage) stops.push(imageGenerationService.cancelGeneration());
+  try { await Promise.all(stops); }
   catch (e) { logger.error('Error stopping generation:', e); }
-  if (deps.isGeneratingImage) imageGenerationService.cancelGeneration().catch(() => { });
 }
 export async function executeDeleteConversationFn(
   deps: Pick<GenerationDeps, 'activeConversationId' | 'isStreaming' | 'clearStreamingMessage' | 'removeImagesByConversationId' | 'deleteConversation' | 'setActiveConversation' | 'navigation' | 'setAlertState'>,
