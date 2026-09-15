@@ -313,7 +313,7 @@ export const useChatScreen = () => {
   );
 
   const chatActions = useChatScreenActions({
-    generationDeps: genDeps,
+    generationDeps: genDeps, generationDepsRef: genDepsRef,
     modelDeps,
     activeModelInfo,
     supportsToolCalling,

@@ -41,6 +41,7 @@ const VIEWER_FADE_OUT_MS = 350;
 
 interface ChatScreenActionsArgs {
   generationDeps: GenerationDeps;
+  generationDepsRef: MutableRefObject<GenerationDeps | null>;
   modelDeps: Parameters<typeof handleModelSelectFn>[0];
   activeModelInfo: ActiveTextModelResult;
   supportsToolCalling: boolean;
@@ -69,6 +70,7 @@ interface ChatScreenActionsArgs {
 
 export function useChatScreenActions({
   generationDeps,
+  generationDepsRef,
   modelDeps,
   activeModelInfo,
   supportsToolCalling,
@@ -176,14 +178,15 @@ export function useChatScreenActions({
     handleCopyMessage: (content: string) => {
       callHook(HOOKS.clipboardRecordLocalText, content, Date.now());
     },
-    handleRetryMessage: (message: ChatStoreState['conversations'][number]['messages'][number]) =>
-      handleRetryMessageFn(message, generationDeps, {
-        activeConversationId,
-        hasActiveModel,
-        activeConversation,
+    handleRetryMessage: (message: ChatStoreState['conversations'][number]['messages'][number]) => {
+      const currentDeps = generationDepsRef.current ?? generationDeps;
+      return handleRetryMessageFn(message, currentDeps, {
+        activeConversationId: currentDeps.activeConversationId,
+        hasActiveModel: !!currentDeps.hasActiveModel,
         deleteMessagesAfter,
         setDebugInfo,
-      }),
+      });
+    },
     handleEditMessage: (
       message: ChatStoreState['conversations'][number]['messages'][number],
       newContent: string,
