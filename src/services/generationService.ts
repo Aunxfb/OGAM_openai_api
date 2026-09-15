@@ -353,7 +353,12 @@ class GenerationService {
     const shownLen = (store.streamingMessage + store.streamingReasoningContent).trim().length;
     logger.log(`[STOP-SM] keepShownPartialOrClear convId=${convId ?? 'null'} shown=${shownLen}ch → ${convId ? 'finalize' : 'clear'}`);
     if (convId) {
-      store.finalizeStreamingMessage(convId, generationTimeMs, this.buildGenerationMeta());
+      store.finalizeStreamingMessage(
+        convId,
+        generationTimeMs,
+        this.buildGenerationMeta(),
+        'cancelled',
+      );
     } else {
       store.clearStreamingMessage();
     }
@@ -362,6 +367,8 @@ class GenerationService {
   /** Stop the current generation. Returns partial content if any was generated. */
   async stopGeneration(): Promise<string> {
     if (!this.state.isGenerating) {
+      // Settle the visible reply before native stop callbacks can finalize it as a normal completion.
+      this.keepShownPartialOrClear();
       // Stop generation on every engine through the registry — no engine enumeration leaked into the caller.
       await stopAllTextEngines();
       const provider = this.getCurrentProvider();
@@ -370,9 +377,6 @@ class GenerationService {
         this.currentRemoteAbortController.abort();
         this.currentRemoteAbortController = null;
       }
-      // Generation already reset — but a partial may still be on screen (e.g. generationSession.end ran
-      // first, or LiteRT's state diverged). Keep the shown output instead of blindly clearing it.
-      this.keepShownPartialOrClear();
       return '';
     }
 

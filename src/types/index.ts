@@ -284,7 +284,9 @@ export interface Message {
   /** Stable cross-device id for a message (falls back to `id` when absent). */
   uuid?: string;
   /** Portable tool artifacts carried on a message for rendering. */
-  toolArtifacts?: Array<{ name: string; result: string }>;
+  toolArtifacts?: Array<{ name: string; result: string; status?: string }>;
+  /** Terminal outcome for this turn, including a deliberate user stop. */
+  turnStatus?: 'cancelled';
   /** Which device wrote this message (null/undefined = local or unknown). */
   provenance?: MessageProvenance;
 }

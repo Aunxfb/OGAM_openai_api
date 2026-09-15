@@ -121,7 +121,7 @@ interface ChatState {
   setLoadingModelName: (name: string | null) => void;
   lastReplyEnd: ReplyEnd | null;
   noteReplyEndHandled: () => void;
-  finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number, generationMeta?: GenerationMeta) => void;
+  finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number, generationMeta?: GenerationMeta, turnStatus?: Message['turnStatus']) => void;
   clearStreamingMessage: () => void;
   getStreamingState: () => { conversationId: string | null; content: string; reasoningContent: string; isStreaming: boolean; isThinking: boolean };
   updateCompactionState: (conversationId: string, summary?: string, cutoffMessageId?: string) => void;
@@ -360,7 +360,7 @@ export const useChatStore = create<ChatState>()(
         set({ isThinking: thinking });
       },
 
-      finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta) => {
+      finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta, turnStatus) => {
         const { streamingMessage, streamingReasoningContent, streamingForConversationId, addMessage } = get();
 
         const { persisted, content, reasoningContent } = finalizeStreamedReply({
@@ -380,6 +380,7 @@ export const useChatStore = create<ChatState>()(
             reasoningContent,
             generationTimeMs,
             generationMeta,
+            turnStatus,
           });
         }
         set({
