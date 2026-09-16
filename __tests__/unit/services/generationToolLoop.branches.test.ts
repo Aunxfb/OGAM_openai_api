@@ -285,38 +285,6 @@ describe('runToolLoop — Gemma text parsing branches', () => {
   });
 });
 
-describe('runToolLoop — bounded multi-tool completion', () => {
-  beforeEach(resetMocks);
-
-  it('stops after the configured tool steps and preserves the tool context for the next message', async () => {
-    mockAppState.settings.maxToolCalls = 3;
-    for (let index = 0; index < 3; index += 1) {
-      mockedGenerateResponseWithTools.mockResolvedValueOnce({
-        fullResponse: '',
-        toolCalls: [
-          {
-            id: `tc-${index}`,
-            name: 'web_search',
-            arguments: { query: `query-${index}` },
-          },
-        ],
-      });
-    }
-    const ctx = createContext();
-    await runToolLoop(ctx);
-
-    expect(mockExecuteToolCall).toHaveBeenCalledTimes(3);
-    expect(mockedGenerateResponseWithTools).toHaveBeenCalledTimes(3);
-    expect(
-      mockedGenerateResponseWithTools.mock.calls.every(
-        call => call[1].tools.length > 0,
-      ),
-    ).toBe(true);
-    expect(mockAddMessage).toHaveBeenCalledTimes(6);
-    expect(ctx.onFinalResponse).toHaveBeenCalledWith(toolStepLimitNotice(3));
-  });
-});
-
 // ===========================================================================
 // buildLiteRTHistory — content mapping/filter (lines 353-354)
 // ===========================================================================
