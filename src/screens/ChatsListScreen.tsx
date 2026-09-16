@@ -252,6 +252,7 @@ export const ChatsListScreen: React.FC = () => {
             name={selecting ? (selected ? 'check-square' : 'square') : 'chevron-right'}
             size={20}
             color={selected ? colors.primary : colors.textMuted}
+            style={selecting ? styles.selectionIcon : undefined}
           />
         </AnimatedListItem>
       </Swipeable>
@@ -276,14 +277,21 @@ export const ChatsListScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Chats</Text>
         {selecting ? (
-          <Button title="Cancel" variant="secondary" size="small" onPress={stopSelecting} />
+          <Button
+            title=""
+            accessibilityLabel="Cancel selection"
+            variant="ghost"
+            size="small"
+            onPress={stopSelecting}
+            icon={<Icon name="x" size={16} color={colors.text} />}
+          />
         ) : (
           <View style={styles.headerActions}>
             {conversations.length > 0 ? (
               <Button
                 title=""
                 accessibilityLabel="Select chats"
-                variant="secondary"
+                variant="ghost"
                 size="small"
                 onPress={() => setSelecting(true)}
                 icon={<Icon name="check-square" size={16} color={colors.text} />}
@@ -370,7 +378,7 @@ export const ChatsListScreen: React.FC = () => {
               <Button
                 title=""
                 accessibilityLabel="Delete selected chats"
-                variant="danger"
+                variant="ghost"
                 size="small"
                 disabled={selectedIds.size === 0}
                 onPress={handleBulkDelete}
@@ -487,6 +495,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
     flex: 1,
+  },
+  selectionIcon: {
+    marginLeft: SPACING.sm,
   },
   noMatches: {
     ...TYPOGRAPHY.bodySmall,
