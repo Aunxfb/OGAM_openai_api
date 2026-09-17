@@ -153,7 +153,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       (message.isThinking ||
         (parsedContent.thinking && !parsedContent.response.trim())),
   );
-
+  // Tools offered, cutoff state, and generation details describe the response above them. Failed
+  // attempts can persist request metadata without producing an answer; those are not turns with a
+  // footer, and retries must not leave one metadata block per empty attempt.
+  const hasVisibleAnswer = Boolean(hasAttachments || parsedContent.response.trim());
+  const showTurnFooter =
+    !hideProse && !isUser && !isStreaming && hasVisibleAnswer;
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
@@ -220,15 +225,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       )}
 
-      <RoutedToolsRow
-        message={message}
-        isUser={isUser}
-        isStreaming={isStreaming}
-        styles={styles}
-        colors={colors}
-      />
+      {showTurnFooter && (
+        <RoutedToolsRow
+          message={message}
+          isUser={isUser}
+          isStreaming={isStreaming}
+          styles={styles}
+          colors={colors}
+        />
+      )}
 
-      {!isUser && !isStreaming && message.generationMeta?.truncated && (
+      {showTurnFooter && message.generationMeta?.truncated && (
         <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
           <Icon name="alert-triangle" size={12} color={colors.textMuted} />
           <Text style={styles.toolStatusText}>
@@ -237,7 +244,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showGenerationDetails && !isUser && message.generationMeta && (
+      {showTurnFooter && showGenerationDetails && message.generationMeta && (
         <GenerationMeta
           messageId={message.id}
           generationMeta={message.generationMeta}
