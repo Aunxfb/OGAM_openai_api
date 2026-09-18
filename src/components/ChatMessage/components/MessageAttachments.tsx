@@ -82,6 +82,7 @@ interface MessageAttachmentsProps {
   colors: any;
   onImagePress?: (uri: string) => void;
 }
+}
 
 export function MessageAttachments({
   attachments,
@@ -139,14 +140,6 @@ export function MessageAttachments({
                 Voice message
               </Text>
             </View>
-            {attachment.textContent ? (
-              <Text
-                testID={`audio-transcription-${index}`}
-                style={[styles.audioTranscription, isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant]}
-              >
-                {attachment.textContent}
-              </Text>
-            ) : null}
           </View>
         ) : attachment.type === 'document' ? (
           <TouchableOpacity

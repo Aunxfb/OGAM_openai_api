@@ -173,9 +173,6 @@ const createBubbleStyles = (colors: ThemeColors) => ({
     alignItems: 'center' as const,
     gap: SPACING.xs,
   },
-  audioTranscription: {
-    ...TYPOGRAPHY.bodySmall,
-  },
   documentBadgeUser: {
     backgroundColor: 'rgba(0, 0, 0, 0.15)',
   },
