@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceInfo, DownloadedModel, ModelRecommendation, ONNXImageModel, ImageGenerationMode, AutoDetectMethod, CacheType, InferenceBackend, INFERENCE_BACKENDS, LiteRTBackend, GeneratedImage } from '../types';
 import { MAX_TOKEN_LIMIT } from '../constants';
+import { createLocalServerSlice, mergePersistedLocalServer, type LocalServerSlice } from './localServerSlice';
 
 function isUnknownLike(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -94,7 +95,7 @@ type AppSettings = {
 
 type ThemeMode = 'system' | 'light' | 'dark';
 
-interface AppState {
+interface AppState extends LocalServerSlice {
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   hasCompletedOnboarding: boolean;
@@ -289,6 +290,7 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
     ...currentState,
     ...persistedState,
     settings: { ...DEFAULT_SETTINGS, ...persistedState?.settings },
+    localServer: mergePersistedLocalServer(persistedState?.localServer),
   };
   // Drop legacy download tracking fields. The unified downloadStore (backed
   // by the native Room DB) is now the source of truth. Persisted entries
@@ -306,10 +308,7 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
     merged.settings = { ...merged.settings, cacheType: persistedState.settings.flashAttn ? 'q8_0' : 'f16', flashAttn: true };
   }
   if (persistedState?.settings && !persistedState.settings.inferenceBackend) {
-    merged.settings = {
-      ...merged.settings,
-      inferenceBackend: Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU,
-    };
+    merged.settings = { ...merged.settings, inferenceBackend: Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU };
   }
 
   if (merged.checklistDismissed && merged.onboardingChecklist &&
@@ -337,7 +336,7 @@ function clampTokenSettings(patch: Partial<AppSettings>): Partial<AppSettings> {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set, get, api) => ({
       themeMode: 'system' as ThemeMode,
       setThemeMode: (mode) => set({ themeMode: mode }),
       hasCompletedOnboarding: false,
@@ -468,6 +467,7 @@ export const useAppStore = create<AppState>()(
       setToolCountHintDismissed: () => set({ toolCountHintDismissed: true }),
       loadedSettings: null,
       setLoadedSettings: (settings) => set({ loadedSettings: settings }),
+      ...createLocalServerSlice(set, get, api),
     }),
     {
       name: 'local-llm-app-storage',
@@ -493,6 +493,7 @@ export const useAppStore = create<AppState>()(
         desktopPromoDismissed: state.desktopPromoDismissed,
         proAhaTriggeredBy: state.proAhaTriggeredBy,
         loadedSettings: state.loadedSettings,
+        localServer: state.localServer,
       }),
     }
   )

@@ -100,7 +100,7 @@ llama-server, Ollama, and LM Studio.
   - Depends on: T0
   - Verify: `npx tsc --noEmit` green; `npx eslint src/services/localServer/`.
 
-- [ ] **T2: Add persisted `localServer` slice to `src/stores/appStore.ts`.**
+- [x] **T2: Add persisted `localServer` slice to `src/stores/appStore.ts`.**
   Defaults: `enabled:false, port:8080, bindMode:'loopback', tlsMode:'off',
   queueDepth:4`. Pure reactive projection; no side-effects here.
   - Depends on: T1

@@ -102,6 +102,18 @@ export const resetStores = (): void => {
       createdProject: false,
     },
     checklistDismissed: false,
+    localServer: {
+      enabled: false,
+      port: 8080,
+      bindMode: 'loopback',
+      interfaceIp: '',
+      tlsMode: 'off',
+      certPath: '',
+      keyPath: '',
+      apiKey: '',
+      queueDepth: 4,
+    },
+    localServerStatus: { running: false, urls: [], requestsServed: 0, lastError: null },
   });
 
   // Reset chat store
