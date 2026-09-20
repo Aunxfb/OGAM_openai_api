@@ -55,7 +55,7 @@ beforeEach(() => {
   audioSessionManager._reset();
   // Default happy-path native results.
   mockStart.mockReturnValue({ status: 'success' });
-  mockStop.mockReturnValue({ status: 'success', path: '/mock/input.wav', duration: 2.5 });
+  mockStop.mockReturnValue({ status: 'success', paths: ['/mock/input.wav'], duration: 2.5 });
   mockSetAudioSessionActivity.mockResolvedValue(undefined);
 });
 
@@ -247,7 +247,7 @@ describe('stopRecording', () => {
   it('defaults durationSeconds to 0 when native omits it (?? fallback)', async () => {
     Platform.OS = 'ios';
     await audioRecorderService.startRecording();
-    mockStop.mockReturnValue({ status: 'success', path: '/mock/input.wav' });
+    mockStop.mockReturnValue({ status: 'success', paths: ['/mock/input.wav'] });
 
     await expect(audioRecorderService.stopRecording()).resolves.toEqual({
       path: '/mock/input.wav',
@@ -265,6 +265,16 @@ describe('stopRecording', () => {
     );
     // State is still reset even on the save-failure path.
     expect(audioRecorderService.isCurrentlyRecording()).toBe(false);
+  });
+
+  it('throws when native stop succeeds with no recorded file', async () => {
+    Platform.OS = 'ios';
+    await audioRecorderService.startRecording();
+    mockStop.mockReturnValue({ status: 'success', paths: [], duration: 0 });
+
+    await expect(audioRecorderService.stopRecording()).rejects.toThrow(
+      'Recording failed to save',
+    );
   });
 });
 
