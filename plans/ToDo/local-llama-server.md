@@ -107,7 +107,7 @@ llama-server, Ollama, and LM Studio.
   - Verify: `npx jest <new slice test file>` green (store defaults +
     persist round-trip); `npx tsc --noEmit`.
 
-- [ ] **T3: Build `LocalServerService` — the owning service.**
+- [x] **T3: Build `LocalServerService` — the owning service.**
   `src/services/localServer/LocalServerService.ts`: the SINGLE owner of server
   state machine (stopped/starting/running/stopping/error) + FIFO queue
   (depth from config, `503` + `Retry-After` when full) + Bearer auth check
