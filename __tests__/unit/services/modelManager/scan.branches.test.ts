@@ -442,4 +442,17 @@ describe('importLocalModel', () => {
     expect(copyFileWithProgress).toHaveBeenCalledWith('content://provider/x.litertlm', '/models/x.litertlm', expect.anything());
     expect(storage.persistDownloadedModel).toHaveBeenCalled();
   });
+
+  it('labels a litert import quantization as LiteRT instead of Unknown', async () => {
+    mockedRNFS.exists.mockResolvedValueOnce(false); // dest
+    (mockedRNFS.stat as jest.Mock).mockResolvedValueOnce({ size: 1_000_000 });
+    await importLocalModel({
+      sourceUri: 'content://provider/gemma.litertlm',
+      fileName: 'gemma-4-E2B-it.litertlm',
+      modelsDir: '/models',
+    } as any);
+    expect(storage.buildDownloadedModel).toHaveBeenCalledWith(expect.objectContaining({
+      file: expect.objectContaining({ quantization: 'LiteRT' }),
+    }));
+  });
 });

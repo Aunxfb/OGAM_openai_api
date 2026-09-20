@@ -416,7 +416,8 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
   });
 
   const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
-  const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';
+  // LiteRT files carry no GGUF quant token — label the engine like curated downloads do.
+  const quantization = isLitert ? 'LiteRT' : (quantMatch ? quantMatch[1].toUpperCase() : 'Unknown');
   const modelName = fileName.replace(/\.gguf$/i, '').replace(/\.litertlm$/i, '').replace(/[_-]Q\d+.*/i, '');
   const destStat = await RNFS.stat(destPath);
   const fileSize = parseSizeInt(destStat.size);
