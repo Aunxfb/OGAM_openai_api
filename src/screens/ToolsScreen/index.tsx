@@ -30,6 +30,7 @@ export const ToolsScreen: React.FC = () => {
   const updateSettings = useAppStore(st => st.updateSettings);
   const toolCountHintDismissed = useAppStore(st => st.toolCountHintDismissed);
   const setToolCountHintDismissed = useAppStore(st => st.setToolCountHintDismissed);
+  const hidePromotions = useAppStore(st => st.settings.hidePromotions);
 
   const handleToggleTool = (toolId: string) => {
     const cur = useAppStore.getState().settings.enabledTools || [];
@@ -54,7 +55,8 @@ export const ToolsScreen: React.FC = () => {
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Pro Tools always sits on top of the listing. */}
+        {/* Pro Tools always sits on top of the listing — hidden when promos are suppressed. */}
+        {!hidePromotions && (
         <TouchableOpacity
           style={styles.proToolsButton}
           onPress={openProTools}
@@ -70,6 +72,7 @@ export const ToolsScreen: React.FC = () => {
           </View>
           <Icon name="chevron-right" size={18} color={colors.textMuted} />
         </TouchableOpacity>
+        )}
 
         {showHint && (
           <View style={[styles.hintBanner, { backgroundColor: colors.surface }]}>

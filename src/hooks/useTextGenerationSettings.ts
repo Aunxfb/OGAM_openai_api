@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from '../stores/appStore';
 import { selectIsLiteRT, useAppStore } from '../stores';
+import { MAX_TOKEN_LIMIT } from '../constants';
 
 export interface NumericSettingModel {
   key: string;
@@ -40,15 +41,20 @@ export function useTextGenerationSettings() {
   const topP = settings.topP ?? DEFAULT_SETTINGS.topP;
   const repeatPenalty =
     settings.repeatPenalty ?? DEFAULT_SETTINGS.repeatPenalty;
-  const llamaModelLimit =
-    modelMaxContext ?? Math.max(maxTokens, contextLength, 512);
+  const llamaModelLimit = Math.min(
+    modelMaxContext ?? Math.max(maxTokens, contextLength, 512),
+    MAX_TOKEN_LIMIT,
+  );
 
   const liteRTTemperature =
     settings.liteRTTemperature ?? DEFAULT_SETTINGS.liteRTTemperature;
   const liteRTMaxTokens =
     settings.liteRTMaxTokens ?? DEFAULT_SETTINGS.liteRTMaxTokens;
   const liteRTTopP = settings.liteRTTopP ?? DEFAULT_SETTINGS.liteRTTopP;
-  const liteRTModelLimit = modelMaxContext ?? Math.max(liteRTMaxTokens, 512);
+  const liteRTModelLimit = Math.min(
+    modelMaxContext ?? Math.max(liteRTMaxTokens, 512),
+    MAX_TOKEN_LIMIT,
+  );
 
   const toolCalls = {
     key: 'maxToolCalls',

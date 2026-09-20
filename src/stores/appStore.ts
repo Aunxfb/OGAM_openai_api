@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceInfo, DownloadedModel, ModelRecommendation, ONNXImageModel, ImageGenerationMode, AutoDetectMethod, CacheType, InferenceBackend, INFERENCE_BACKENDS, LiteRTBackend, GeneratedImage } from '../types';
+import { MAX_TOKEN_LIMIT } from '../constants';
 
 function isUnknownLike(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -86,6 +87,9 @@ type AppSettings = {
    *  migration turns it ON for users who already had a gateway. `undefined` = never set (reads OFF).
    *  Optional so the migration can distinguish "never set" from an explicit choice. */
   autoDiscoverRemoteModels?: boolean;
+  /** Hide all PRO and Off Grid AI Desktop promotions (banners, cards, upsell
+   *  panels, entry rows, and inline desktop links). Off by default. */
+  hidePromotions: boolean;
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -238,6 +242,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liteRTTemperature: 0.7,
   liteRTTopP: 0.9,
   liteRTMaxTokens: 4096,
+  hidePromotions: false,
 };
 
 function migrateEnabledTools(merged: any): void {
@@ -267,6 +272,16 @@ function migrateBoostedContext(merged: any): void {
   }
   if (s.liteRTMaxTokens === MCP_BOOST_CTX_CEILING) {
     s.liteRTMaxTokens = DEFAULT_SETTINGS.liteRTMaxTokens;
+  }
+}
+// Token sliders are hard-capped at MAX_TOKEN_LIMIT (128K). Clamp any persisted
+// value left above the ceiling (e.g. from when model metadata drove the max)
+// back down. Idempotent: values at or below the ceiling are untouched.
+function migrateTokenCeiling(merged: any): void {
+  const s = merged.settings;
+  if (!s) return;
+  for (const key of ['maxTokens', 'contextLength', 'liteRTMaxTokens'] as const) {
+    if (typeof s[key] === 'number' && s[key] > MAX_TOKEN_LIMIT) s[key] = MAX_TOKEN_LIMIT;
   }
 }
 function migratePersistedState(persistedState: any, currentState: AppState): AppState {
@@ -301,11 +316,24 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
     !Object.values(merged.onboardingChecklist).every(Boolean)) merged.checklistDismissed = false;
   migrateEnabledTools(merged);
   migrateBoostedContext(merged);
+  migrateTokenCeiling(merged);
   return merged as AppState;
 }
 
 export const selectIsLiteRT = (state: AppState): boolean =>
   state.downloadedModels.find(m => m.id === state.activeModelId)?.engine === 'litert';
+
+// Single choke point for the 128K slider ceiling: any live settings write above
+// MAX_TOKEN_LIMIT is clamped, so sliders and loaders never see an over-ceiling
+// value. Values at/below the ceiling (and non-numbers) pass through untouched.
+function clampTokenSettings(patch: Partial<AppSettings>): Partial<AppSettings> {
+  const clamped = { ...patch };
+  for (const key of ['maxTokens', 'contextLength', 'liteRTMaxTokens'] as const) {
+    const v = clamped[key];
+    if (typeof v === 'number' && v > MAX_TOKEN_LIMIT) clamped[key] = MAX_TOKEN_LIMIT;
+  }
+  return clamped;
+}
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -354,7 +382,7 @@ export const useAppStore = create<AppState>()(
       settings: { ...DEFAULT_SETTINGS },
       updateSettings: (newSettings) =>
         set((state) => ({
-          settings: { ...state.settings, ...newSettings },
+          settings: { ...state.settings, ...clampTokenSettings(newSettings) },
         })),
       resetSettings: () => set({ settings: { ...DEFAULT_SETTINGS } }),
       // Image models (ONNX-based)

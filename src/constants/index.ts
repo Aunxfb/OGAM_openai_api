@@ -100,6 +100,11 @@ export const CREDIBILITY_LABELS = {
   },
 };
 
+// Hard ceiling for the Max Tokens / Context Length sliders (128K). Model
+// metadata can advertise 256K+ windows that phone RAM cannot back, so both
+// sliders clamp here. Single source of truth — see useTextGenerationSettings.
+export const MAX_TOKEN_LIMIT = 131072;
+
 // App configuration
 export const APP_CONFIG = {
   modelStorageDir: 'models',

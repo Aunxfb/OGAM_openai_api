@@ -229,13 +229,16 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
       // guard, the auto-check that owns it will settle the reachable list, so we do not alert.
       const noServersPresent = added === 0 && useRemoteServerStore.getState().servers.length === 0;
       if (noServersPresent && ran && reachable.size === 0) {
+        const hidePromos = useAppStore.getState().settings.hidePromotions;
         setAlertState(showAlert(
           'No Servers Found',
           'Make sure you\'re on the same WiFi network as your server and that it\'s running. Off Grid AI Desktop serves its models to this phone over your network.',
-          [
-            { text: 'Dismiss', style: 'cancel' },
-            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {}) },
-          ],
+          hidePromos
+            ? [{ text: 'Dismiss', style: 'cancel' }]
+            : [
+              { text: 'Dismiss', style: 'cancel' },
+              { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {}) },
+            ],
         ));
       }
     } catch (e) {

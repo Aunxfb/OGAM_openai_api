@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../Button';
+import { useAppStore } from '../../stores';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING, OFF_GRID_DESKTOP_URL } from '../../constants';
@@ -20,6 +21,20 @@ interface VoiceModelsUpsellProps {
 export const VoiceModelsUpsell: React.FC<VoiceModelsUpsellProps> = ({ onGetPro }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const hidePromotions = useAppStore((s) => s.settings.hidePromotions);
+
+  // Promotions suppressed: neutral empty state with no CTA and no desktop link.
+  if (hidePromotions) {
+    return (
+      <View style={styles.container} testID="voice-models-upsell">
+        <View style={styles.iconCircle}>
+          <Icon name="volume-2" size={28} color={colors.textMuted} />
+        </View>
+        <Text style={styles.title}>Voice models</Text>
+        <Text style={styles.body}>No voice models available.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="voice-models-upsell">

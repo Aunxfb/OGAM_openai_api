@@ -11,6 +11,7 @@ import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING, FONTS, OFF_GRID_DESKTOP_URL } from '../constants';
 import { huggingFaceService } from '../services';
 import { ModelFile, RemoteModel, RemoteServer } from '../types';
+import { useAppStore } from '../stores';
 import logger from '../utils/logger';
 import { withUtm } from '../utils/utm';
 
@@ -98,6 +99,7 @@ export const NetworkSection: React.FC<{
 }> = ({ servers, discoveredModels, connectingServerId, connectedServerId, isCheckingNetwork, isScanning, onConnectServer, onScanNetwork, onAddManually, colors }) => {
   const styles = networkSectionStyles(colors);
   const hasServers = servers.length > 0;
+  const hidePromotions = useAppStore((s) => s.settings.hidePromotions);
   const busy = isCheckingNetwork || isScanning;
 
   return (
@@ -128,12 +130,14 @@ export const NetworkSection: React.FC<{
           <Text style={styles.emptyText}>
             No servers found. Make sure you're on the same WiFi network as your Off Grid AI Desktop, Ollama, or LM Studio server, then scan or add it manually.
           </Text>
+          {!hidePromotions && (
           <TouchableOpacity
             onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {})}
             testID="onboarding-get-desktop"
           >
             <Text style={[styles.getDesktopLink, { color: colors.primary }]}>Get Off Grid AI Desktop</Text>
           </TouchableOpacity>
+          )}
         </>
       )}
 

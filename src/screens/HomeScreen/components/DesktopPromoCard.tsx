@@ -20,6 +20,7 @@ const DESKTOP_URL = withUtm(OFF_GRID_DESKTOP_URL, 'home-promo');
 export const DesktopPromoCard: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const promoHidden = useAppStore((s) => s.settings.hidePromotions);
   const desktopPromoDismissed = useAppStore((s) => s.desktopPromoDismissed);
   const setDesktopPromoDismissed = useAppStore((s) => s.setDesktopPromoDismissed);
   const [linkCopied, setLinkCopied] = React.useState(false);
@@ -30,7 +31,7 @@ export const DesktopPromoCard: React.FC = () => {
     setTimeout(() => setLinkCopied(false), 2000);
   }, []);
 
-  if (desktopPromoDismissed) return null;
+  if (promoHidden || desktopPromoDismissed) return null;
 
   return (
     <AnimatedPressable
