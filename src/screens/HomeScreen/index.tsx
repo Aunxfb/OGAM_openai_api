@@ -26,6 +26,7 @@ import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
 import { useUiModeStore } from '../../stores/uiModeStore';
+import { useAppStore } from '../../stores';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -96,6 +97,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const whisperModelId = useWhisperStore((s) => s.downloadedModelId);
   const whisperPresentCount = useWhisperStore((s) => s.presentModelIds?.length ?? 0);
   const voiceSummary = useUiModeStore((s) => s.voiceSummary);
+  const hidePromotions = useAppStore((s) => s.settings.hidePromotions);
 
   const modelLabels: Record<ModelRowType, string> = {
     text: activeTextModel?.name ?? '—',
@@ -144,9 +146,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <Text style={styles.title}>Off Grid AI</Text>
               {showIcon && <PulsatingIcon onPress={openSheet} />}
             </View>
+            {!hidePromotions && (
             <TouchableOpacity onPress={() => navigation.navigate('ProDetail')} hitSlop={8} style={styles.crownButton}>
               <IconMC name="crown" size={16} color={colors.primary} />
             </TouchableOpacity>
+            )}
           </View>
 
           {/* Collapsed Models summary — tap to open the manager sheet. Both the

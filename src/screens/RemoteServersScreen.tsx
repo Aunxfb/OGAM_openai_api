@@ -45,6 +45,7 @@ export const RemoteServersScreen: React.FC = () => {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  const hidePromotions = useAppStore(s => s.settings.hidePromotions);
 
   // Auto-check all server statuses when screen opens
   useEffect(() => {
@@ -75,13 +76,16 @@ export const RemoteServersScreen: React.FC = () => {
     try {
       const discovered = await discoverLANServers();
       if (discovered.length === 0) {
+        const hidePromos = useAppStore.getState().settings.hidePromotions;
         setAlertState(showAlert(
           'No Servers Found',
           'No LLM servers were found on your local network. Run Off Grid AI Desktop on your Mac to serve its models here.',
-          [
-            { text: 'Dismiss', style: 'cancel' },
-            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(DESKTOP_URL).catch(() => {}) },
-          ],
+          hidePromos
+            ? [{ text: 'Dismiss', style: 'cancel' }]
+            : [
+              { text: 'Dismiss', style: 'cancel' },
+              { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(DESKTOP_URL).catch(() => {}) },
+            ],
         ));
         return;
       }
@@ -162,6 +166,7 @@ export const RemoteServersScreen: React.FC = () => {
             <Text style={styles.emptyText}>
               Connect to Off Grid AI Desktop, Ollama, LM Studio, or other LLM servers on your network
             </Text>
+            {!hidePromotions && (
             <TouchableOpacity
               style={styles.desktopLink}
               onPress={() => Linking.openURL(DESKTOP_URL).catch(() => {})}
@@ -171,6 +176,7 @@ export const RemoteServersScreen: React.FC = () => {
               <Icon name="monitor" size={16} color={theme.colors.primary} />
               <Text style={styles.desktopLinkText}>Get Off Grid AI Desktop</Text>
             </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
               <Icon name="plus" size={20} color={theme.colors.background} />
               <Text style={styles.addButtonText}>Add Server</Text>
@@ -269,6 +275,7 @@ export const RemoteServersScreen: React.FC = () => {
             Off Grid AI Desktop runs on your Mac and serves its models to this phone over your own network.{'\n\n'}
             Make sure your server is running and accessible from your device. For security, only connect to servers on trusted networks.
           </Text>
+          {!hidePromotions && (
           <TouchableOpacity
             style={styles.desktopLink}
             onPress={() => Linking.openURL(DESKTOP_URL).catch(() => {})}
@@ -278,6 +285,7 @@ export const RemoteServersScreen: React.FC = () => {
             <Icon name="monitor" size={16} color={theme.colors.primary} />
             <Text style={styles.desktopLinkText}>Get Off Grid AI Desktop</Text>
           </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 

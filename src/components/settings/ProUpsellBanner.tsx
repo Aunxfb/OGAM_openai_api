@@ -30,8 +30,8 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   // Never upsell a Pro user — isProActive covers keychain/dev-unlocked Pro too, which
-  // hasRegisteredPro alone misses.
-  const show = useAppStore((s) => !s.proBannerDismissed && !s.hasRegisteredPro && !s.isProActive);
+  // hasRegisteredPro alone misses. hidePromotions suppresses all PRO/Desktop promos.
+  const show = useAppStore((s) => !s.settings.hidePromotions && !s.proBannerDismissed && !s.hasRegisteredPro && !s.isProActive);
   const dismiss = useAppStore((s) => s.setProBannerDismissed);
   const pricing = getPricingCopy();
 

@@ -112,6 +112,8 @@ export const ChatScreen: React.FC = () => {
     proAhaShownThisSession.current = false;
   }, []);
   useEffect(() => subscribeProPrompt(() => {
+    // Suppressed when the user hides all PRO/Desktop promotions.
+    if (useAppStore.getState().settings.hidePromotions) return;
     if (proAhaShownThisSession.current) return;
     proAhaShownThisSession.current = true;
     setProAhaVisible(true);

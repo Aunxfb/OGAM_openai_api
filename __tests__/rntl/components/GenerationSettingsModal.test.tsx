@@ -216,7 +216,7 @@ describe('GenerationSettingsModal', () => {
     expect(getByText('Max Tokens')).toBeTruthy();
   });
 
-  it('uses the loaded model 262K limit for both in-chat text controls', () => {
+  it('caps both in-chat text controls at 128K even for a 262K model', () => {
     mockStoreValues.modelMaxContext = 262144;
     const { getByText, getByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
@@ -224,8 +224,8 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('TEXT GENERATION'));
 
-    expect(getByTestId('setting-maxTokens-slider').props.maximumValue).toBe(262144);
-    expect(getByTestId('setting-contextLength-slider').props.maximumValue).toBe(262144);
+    expect(getByTestId('setting-maxTokens-slider').props.maximumValue).toBe(131072);
+    expect(getByTestId('setting-contextLength-slider').props.maximumValue).toBe(131072);
   });
 
   it('shows performance settings inside TEXT GENERATION section', () => {

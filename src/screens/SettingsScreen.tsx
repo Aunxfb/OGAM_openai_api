@@ -21,6 +21,7 @@ import { MadeWithLove } from '../components/MadeWithLove';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useSettingsSections } from '../components/settings/sectionRegistry';
 import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
+import { HidePromotionsToggle } from '../components/settings/HidePromotionsToggle';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -63,6 +64,7 @@ export const SettingsScreen: React.FC = () => {
   const devProDisabled = useAppStore((s) => s.devProDisabled);
   const setDevProDisabled = useAppStore((s) => s.setDevProDisabled);
   const setHasRegisteredPro = useAppStore((s) => s.setHasRegisteredPro);
+  const hidePromotions = useAppStore((s) => s.settings.hidePromotions);
   const { proStatusLabel } = useProStatusLabel();
 
   useEffect(() => {
@@ -183,6 +185,9 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AnimatedEntry>
 
+        {/* Hide promotions — suppresses all PRO and Desktop promos app-wide. */}
+        <HidePromotionsToggle trigger={focusTrigger} />
+
         {/* Navigation Items */}
         <AttachStep index={5} fill>
           <View style={styles.navSection}>
@@ -215,7 +220,8 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AttachStep>
 
-        {/* PRO Button */}
+        {/* PRO Button — hidden when promotions are suppressed. */}
+        {!hidePromotions && (
         <AnimatedEntry index={6} staggerMs={40} trigger={focusTrigger}>
           <TouchableOpacity
             style={styles.proNavButton}
@@ -237,6 +243,7 @@ export const SettingsScreen: React.FC = () => {
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         </AnimatedEntry>
+        )}
 
         {/* Stay in the loop */}
         <AnimatedEntry index={7} staggerMs={40} trigger={focusTrigger}>

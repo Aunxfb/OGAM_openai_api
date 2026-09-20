@@ -54,7 +54,8 @@ const mockCompleteChecklistStep = jest.fn();
 const mockResetChecklist = jest.fn();
 // Mutated per-test to drive Pro banner visibility. `mock`-prefixed so jest.mock's
 // hoisted factory is allowed to reference it.
-const mockProState = { hasRegisteredPro: false, proBannerDismissed: false };
+const mockProState = { hasRegisteredPro: false, proBannerDismissed: false, hidePromotions: false, isProActive: false };
+const mockUpdateSettings = jest.fn();
 jest.mock('../../../src/stores', () => ({
   useAppStore: jest.fn((selector?: any) => {
     const state = {
@@ -65,7 +66,10 @@ jest.mock('../../../src/stores', () => ({
       resetChecklist: mockResetChecklist,
       setProBannerDismissed: jest.fn(),
       hasRegisteredPro: mockProState.hasRegisteredPro,
+      isProActive: mockProState.isProActive,
       proBannerDismissed: mockProState.proBannerDismissed,
+      settings: { hidePromotions: mockProState.hidePromotions },
+      updateSettings: mockUpdateSettings,
     };
     return selector ? selector(state) : state;
   }),
@@ -93,6 +97,8 @@ describe('SettingsScreen', () => {
     jest.clearAllMocks();
     mockProState.hasRegisteredPro = false;
     mockProState.proBannerDismissed = false;
+    mockProState.hidePromotions = false;
+    mockProState.isProActive = false;
   });
 
   it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {
@@ -237,5 +243,23 @@ describe('SettingsScreen', () => {
       routes: [{ name: 'Onboarding' }],
     });
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('hides the Pro banner and PRO row when promotions are suppressed', () => {
+    mockProState.hidePromotions = true;
+    const { queryByText } = render(<SettingsScreen />);
+    expect(queryByText(/democratized/i)).toBeNull();
+    expect(queryByText('Off Grid AI PRO')).toBeNull();
+  });
+
+  it('shows the PRO row when promotions are not suppressed', () => {
+    const { getByText } = render(<SettingsScreen />);
+    expect(getByText('Off Grid AI PRO')).toBeTruthy();
+  });
+
+  it('writes hidePromotions when the toggle is flipped', () => {
+    const { getByTestId } = render(<SettingsScreen />);
+    fireEvent(getByTestId('hide-promotions-toggle'), 'valueChange', true);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ hidePromotions: true });
   });
 });

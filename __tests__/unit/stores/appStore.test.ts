@@ -336,6 +336,32 @@ describe('appStore', () => {
       expect(settings.imageGuidanceScale).toBe(8.5);
       expect(settings.imageWidth).toBe(768);
     });
+
+    it('hidePromotions defaults to false', () => {
+      expect(getAppState().settings.hidePromotions).toBe(false);
+    });
+
+    it('updateSettings clamps token ceilings to 128K', () => {
+      const { updateSettings } = useAppStore.getState();
+
+      updateSettings({ maxTokens: 262144, contextLength: 262144, liteRTMaxTokens: 262144 });
+
+      const settings = getAppState().settings;
+      expect(settings.maxTokens).toBe(131072);
+      expect(settings.contextLength).toBe(131072);
+      expect(settings.liteRTMaxTokens).toBe(131072);
+    });
+
+    it('updateSettings leaves values at or below 128K untouched', () => {
+      const { updateSettings } = useAppStore.getState();
+
+      updateSettings({ maxTokens: 131072, contextLength: 4096, liteRTMaxTokens: 8192 });
+
+      const settings = getAppState().settings;
+      expect(settings.maxTokens).toBe(131072);
+      expect(settings.contextLength).toBe(4096);
+      expect(settings.liteRTMaxTokens).toBe(8192);
+    });
   });
 
   // ============================================================================

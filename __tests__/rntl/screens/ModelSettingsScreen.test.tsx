@@ -558,7 +558,7 @@ describe('ModelSettingsScreen', () => {
       }
     });
 
-    it('uses the model context ceiling for both context length and max tokens', () => {
+    it('caps the model context ceiling at 128K for both context length and max tokens', () => {
       useAppStore.getState().setModelMaxContext(262144);
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
@@ -572,13 +572,13 @@ describe('ModelSettingsScreen', () => {
         sliders.find(
           (slider: any) => slider.props.testID === 'llama-max-tokens-slider',
         )?.props.maximumValue,
-      ).toBe(262144);
+      ).toBe(131072);
       expect(
         sliders.find(
           (slider: any) =>
             slider.props.testID === 'llama-context-length-slider',
         )?.props.maximumValue,
-      ).toBe(262144);
+      ).toBe(131072);
     });
   });
 
@@ -925,6 +925,7 @@ describe('ModelSettingsScreen', () => {
           liteRTTemperature: undefined as any,
           liteRTTopP: undefined as any,
           liteRTMaxTokens: undefined as any,
+          hidePromotions: undefined as any,
         },
       });
 

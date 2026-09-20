@@ -40,7 +40,7 @@ describe('model settings surface parity', () => {
     _clearSlotsForTesting();
   });
 
-  it('uses the same 262K text limit and writes one shared setting state', () => {
+  it('caps both text limits at 128K and writes one shared setting state', () => {
     useAppStore.getState().setModelMaxContext(262144);
     const chatSettings = render(
       <GenerationSettingsModal visible onClose={() => {}} />,
@@ -50,11 +50,11 @@ describe('model settings surface parity', () => {
 
     expect(
       chatSettings.getByTestId('setting-maxTokens-slider').props.maximumValue,
-    ).toBe(262144);
+    ).toBe(131072);
     expect(
       chatSettings.getByTestId('setting-contextLength-slider').props
         .maximumValue,
-    ).toBe(262144);
+    ).toBe(131072);
 
     fireEvent(
       chatSettings.getByTestId('setting-maxTokens-slider'),
@@ -70,11 +70,11 @@ describe('model settings surface parity', () => {
 
     expect(
       modelSettings.getByTestId('llama-max-tokens-slider').props.maximumValue,
-    ).toBe(262144);
+    ).toBe(131072);
     expect(
       modelSettings.getByTestId('llama-context-length-slider').props
         .maximumValue,
-    ).toBe(262144);
+    ).toBe(131072);
     expect(
       modelSettings.getByTestId('llama-max-tokens-slider').props.value,
     ).toBe(131072);
