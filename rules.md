@@ -46,6 +46,16 @@ Then `grep`/read `/tmp/offgrid-debug.log`. The file appends a `===== session sta
 
 **Merge strategy: ALWAYS a merge commit. NEVER squash (and never rebase-merge).** When merging a PR, use `gh pr merge --merge` (or the "Create a merge commit" button) so the full commit history is preserved on `main`. Do not squash under any circumstances - the small, meaningful per-concern commits are the record and must survive the merge. This applies to both the core repo and the `pro` submodule.
 
+### No pull requests (hard rule — overrides everything below about PRs)
+
+- **NEVER open a pull request.** No `gh pr create`, no PR via the web UI, no exceptions.
+- Merge branches locally (`git merge --no-ff <branch>`), then push the branch.
+- The ONLY exception: the user explicitly says "open a PR". "Push", "ship it", "send it",
+  "commit and push" mean push the branch only — never a PR.
+- The Push / Review-loop / CI-Review sections below still describe the gates to run, but any
+  step that creates, updates, polls, or replies to a PR is dead unless a PR already exists
+  (e.g. one the user opened themselves).
+
 ### Commit early, commit often - never lose progress (agents especially)
 
 **A long task is a chain of small, GREEN, committed steps - not one giant uncommitted diff.** Agents run against context/session limits; anything uncommitted is lost when the session ends. So:
@@ -182,10 +192,10 @@ When the user says "push" (or any equivalent like "ship it", "send it", "push th
 2. Commit all staged changes with a descriptive message.
 3. Ensure you are NOT on `main`. If you are, create an appropriately named branch first: `git checkout -b feat/...` or `fix/...` or `chore/...` etc.
 
-### Pushing & PR
+### Pushing (no PR)
 4. Push the branch: `git push -u origin <branch>`
-5. If no PR exists for this branch, create one with `gh pr create`. **Do NOT include "Generated with Codex" or any AI attribution in PR descriptions.**
-6. If a PR already exists, update its description to reflect **all commits in the PR** (not just the latest push). Read the full commit history with `git log main..HEAD` and write a coherent description that summarises the entire change set - what it does, why, and how.
+5. Do NOT create a PR. If the user opened a PR themselves, update its description to reflect
+**all commits in the PR** (not just the latest push). Read the full commit history with `git log main..HEAD` and write a coherent description that summarises the entire change set - what it does, why, and how.
 
 ### Review loop
 7. Wait for Gemini to review the PR (poll with `gh pr checks` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews` until a review appears).
