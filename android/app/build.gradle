@@ -183,3 +183,30 @@ dependencies {
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testImplementation("androidx.test:core:1.6.1")
 }
+
+// `assembleRelease` also emits offgrid.apk: a byte-for-byte copy of
+// app-release.apk in the same output dir. Existing scripts keep using
+// app-release.apk unchanged.
+tasks.register("copyReleaseApkAsOffgrid") {
+    description = "Copies app-release.apk to offgrid.apk in the same output dir."
+    outputs.file(layout.buildDirectory.file("outputs/apk/release/offgrid.apk"))
+    doLast {
+        def src = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
+        def dst = layout.buildDirectory.file("outputs/apk/release/offgrid.apk").get().asFile
+        if (!src.exists()) {
+            // Warn-only: a missing source means the variant produced no universal
+            // APK (e.g. splits); failing here must never break the release build.
+            logger.warn("copyReleaseApkAsOffgrid: source not found, skipping: ${src}")
+            return
+        }
+        dst.parentFile.mkdirs()
+        java.nio.file.Files.copy(src.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        logger.lifecycle("Copied ${src} to ${dst}")
+    }
+}
+
+afterEvaluate {
+    tasks.named("assembleRelease") {
+        finalizedBy("copyReleaseApkAsOffgrid")
+    }
+}
