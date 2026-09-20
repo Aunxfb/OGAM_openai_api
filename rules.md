@@ -136,15 +136,14 @@ If the answer to 1 is "no", say so and write the simple version. If "yes", build
 - **Contract tests run against the abstraction, so they catch both platforms.** Test the common interface + the capability flags; a single test then guards iOS and Android together. If a test can only be written per-platform, the abstraction is wrong.
 - **Native module contract parity is mandatory.** The Swift and Kotlin implementations of a module must expose the SAME method names, the SAME events (names + payloads), and the SAME semantics (persistence, cleanup, error cascading). Contract drift between Swift and Kotlin is the root cause of platform-only bugs - when you touch a native module on one platform, verify/mirror the other side against the shared TS contract.
 
-## Quality Gates run on PRE-PUSH (not pre-commit)
+## Quality Gates (manual / CI — no pre-push hook)
 
-**Commits are intentionally ungated so red-first / work-in-progress tests can land as small commits.**
-The full quality gate runs via Husky on `git push` (`.husky/pre-push`), scoped to the files pushed
-since upstream:
+**There is no pre-push hook.** Commits and pushes are ungated so work is never blocked by
+unrelated breakage; run the relevant gates yourself before opening a PR:
 
-| Pushed file type | Checks that run automatically (pre-push) |
+| Changed file type | Checks to run |
 |---|---|
-| `.ts` / `.tsx` / `.js` / `.jsx` | eslint, `tsc --noEmit`, `jest --findRelatedTests`, `npm run depcruise`, `npm run knip` |
+| `.ts` / `.tsx` / `.js` / `.jsx` | `eslint` on the files, `npx tsc --noEmit`, `npx jest --findRelatedTests <files>`, `npm run depcruise`, `npm run knip` |
 | `.swift` | SwiftLint, `npm run test:ios` |
 | `.kt` / `.kts` | `compileDebugKotlin`, `lintDebug`, `npm run test:android` |
 
@@ -160,9 +159,8 @@ architecture / SonarCloud / CodeRabbit.
 - Android lint/test require the Gradle wrapper in `android/`.
 
 **Workflow implication (TDD / adversarial red-first):** write a failing test, commit it red (commit is
-free), then drive it green; the branch must be green before `git push` (the gate blocks a red push).
-Never bypass the push gate with `--no-verify`. `core.hooksPath` is `.husky/_` (husky v9); there is no
-pre-commit hook by design.
+free), then drive it green; the branch must be green before opening a PR. There is no pre-commit
+or pre-push hook by design.
 
 ## Testing (lean — this is the whole doctrine)
 
@@ -296,8 +294,8 @@ Prove each fix against the REAL external boundary (e.g. **live Hugging Face**), 
 committed fixture and replayed offline — NO mocks of our own code. Template:
 `__tests__/integration/models/visionMmprojFromHF.test.ts` (`UPDATE_HF_FIXTURES=1` to refresh from live).
 
-## CI push-gate flakiness
-The pre-push jest gate flakes on **parallel-load timeouts** — tests pass in isolation and the failure
+## Jest flakiness
+The jest gate flakes on **parallel-load timeouts** — tests pass in isolation and the failure
 count varies run-to-run. **Retry the push**; do not "fix" the flaky test. (`--maxWorkers=1
 --workerIdleMemoryLimit`, per the CI notes.)
 
