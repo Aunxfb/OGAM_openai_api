@@ -93,7 +93,12 @@ class AudioRecorderService {
     if (result.status !== 'success') {
       throw new Error('Recording failed to save');
     }
-    const path = result.path;
+    // audio-api 0.12 returns all written segments (rotation support); with the
+    // default rotateIntervalBytes: 0 there is exactly one file.
+    const path = result.paths[0];
+    if (!path) {
+      throw new Error('Recording failed to save');
+    }
     const durationSeconds = (result as any).duration ?? 0;
     logger.log(`[WIRE-RECORDER] ${JSON.stringify({ platform: Platform.OS, path, durationSeconds, status: result.status })}`); // [WIRE] real recorder output (voice-note file/duration)
     return { path, durationSeconds };
