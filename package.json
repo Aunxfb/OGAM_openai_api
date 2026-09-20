@@ -18,7 +18,7 @@
     "test:e2e:single": "maestro test",
     "test:android": "cd android && ./gradlew :app:testDebugUnitTest",
     "test:ios": "cd ios && xcodebuild test -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -destination 'platform=iOS Simulator,name=iPhone 16e' -only-testing:OffgridMobileTests | (xcpretty 2>/dev/null || cat)",
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && node scripts/fetch-audio-binaries.js",
     "depcruise": "depcruise src --config .dependency-cruiser.js",
     "knip": "knip"
   },
