@@ -189,6 +189,9 @@ dependencies {
 // app-release.apk unchanged.
 tasks.register("copyReleaseApkAsOffgrid") {
     description = "Copies app-release.apk to offgrid.apk in the same output dir."
+    // Declared input: without it Gradle can't tell a rebuilt APK from an unchanged
+    // one and wrongly reports the task UP-TO-DATE, silently skipping the copy.
+    inputs.file(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
     outputs.file(layout.buildDirectory.file("outputs/apk/release/offgrid.apk"))
     doLast {
         def src = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
