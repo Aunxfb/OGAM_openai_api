@@ -131,7 +131,14 @@ export function useModelsScreen() {
     isPickingRef.current = true;
     setIsImporting(true);
     try {
-      const result = await pick({ type: [types.allFiles], allowMultiSelection: true });
+      // Android ACTION_GET_CONTENT hides unknown-extension files (.litertlm is not listed
+      // while the same file renamed to .gguf is), so use the full system browser
+      // (ACTION_OPEN_DOCUMENT) there. iOS stays on import mode — public.item lists everything.
+      const pickerOptions =
+        Platform.OS === 'android'
+          ? { type: [types.allFiles], allowMultiSelection: true, mode: 'open' as const }
+          : { type: [types.allFiles], allowMultiSelection: true, mode: 'import' as const };
+      const result = await pick(pickerOptions);
 
       if (!result || result.length === 0) return;
 

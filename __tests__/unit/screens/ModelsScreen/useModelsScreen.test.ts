@@ -224,6 +224,32 @@ describe('useModelsScreen', () => {
       expect(result.current.isImporting).toBe(false);
     });
 
+    it('uses the system file browser (mode open) on Android so .litertlm is listed, import mode on iOS', async () => {
+      const { modelManager } = require('../../../../src/services');
+      const prevOS = Platform.OS;
+      try {
+        (Platform as any).OS = 'android';
+        mockPick.mockResolvedValueOnce([{ uri: 'content://media/model.gguf', name: 'model.gguf', size: 4000 }]);
+        const { result } = renderHook(() => useModelsScreen());
+        await act(async () => {
+          await result.current.handleImportLocalModel();
+        });
+        expect(mockPick).toHaveBeenCalledWith(expect.objectContaining({ mode: 'open' }));
+        expect(modelManager.importLocalModel).toHaveBeenCalled();
+
+        jest.clearAllMocks();
+        (Platform as any).OS = 'ios';
+        mockPick.mockResolvedValueOnce([{ uri: 'file://model.gguf', name: 'model.gguf', size: 4000 }]);
+        const { result: iosResult } = renderHook(() => useModelsScreen());
+        await act(async () => {
+          await iosResult.current.handleImportLocalModel();
+        });
+        expect(mockPick).toHaveBeenCalledWith(expect.objectContaining({ mode: 'import' }));
+      } finally {
+        (Platform as any).OS = prevOS;
+      }
+    });
+
     it('shows alert for invalid file type', async () => {
       mockPick.mockResolvedValueOnce([{ uri: 'file://test.pdf', name: 'test.pdf' }]);
       const { result } = renderHook(() => useModelsScreen());
