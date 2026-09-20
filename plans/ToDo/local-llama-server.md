@@ -78,7 +78,7 @@ llama-server, Ollama, and LM Studio.
 
 ## Tasks
 
-- [ ] **T0: Spike — embeddings path + native TLS/cert APIs (research only, no code).**
+- [x] **T0: Spike — embeddings path + native TLS/cert APIs (research only, no code).**
   Confirm whether `llmService`/llama.rn exposes embeddings; if not, v1 serves
   `501` on `/v1/embeddings` and real embeddings move to v2. Confirm native
   APIs: Android `KeyStore` self-signed generation + PEM BYOC load,
@@ -89,7 +89,7 @@ llama-server, Ollama, and LM Studio.
   - Verify: findings written into this plan's Decisions Log; `501`-vs-real
     embeddings decision fixed before T3 starts.
 
-- [ ] **T1: Add TS contract + config/status types (`src/services/localServer/`).**
+- [x] **T1: Add TS contract + config/status types (`src/services/localServer/`).**
   Create `src/services/localServer/types.ts` (config: enabled, port,
   bindMode, interfaceIp, tlsMode, certPath, keyPath, apiKey, queueDepth;
   status: running, url(s), requestsServed, lastError) and
@@ -215,10 +215,25 @@ llama-server, Ollama, and LM Studio.
 - 2026-09-20: iOS foreground-only documented, not fought; Android foreground
   service + notification + `PARTIAL_WAKE_LOCK`; server stays up with `503`
   across model transitions. Reason: OS reality; never silently drop requests.
+- 2026-09-20 (T0 spike findings): llama.rn `LlamaContext` exposes
+  `tokenize`/`detokenize`/`embedding` (`node_modules/llama.rn/src/index.ts`),
+  but text models load WITHOUT `embedding:true` (`src/services/llm.ts`) while
+  the RAG MiniLM sidecar loads WITH it (`src/services/rag/embedding.ts`).
+  Serving `/v1/embeddings` from the loaded chat model would need an
+  embedding-flagged text context (memory + dimension mismatch vs clients).
+  Decision: v1 serves `501` on `/v1/embeddings`, real embeddings move to v2.
+  `tokenize`/`detokenize` ARE available on the loaded text context today
+  (`llmService.tokenize`), so `POST /tokenize` + `POST /detokenize` stay in
+  v1. Native APIs confirmed: Android `AndroidKeyStore` self-signed generation
+  + PEM BYOC load, foreground service (`FOREGROUND_SERVICE` +
+  `POST_NOTIFICATIONS` runtime, `SystemForegroundService` dataSync pattern
+  already in `AndroidManifest.xml`) + `PARTIAL_WAKE_LOCK`; iOS
+  `Network.framework` `NWListener` + Keychain `SecIdentity` +
+  `NSLocalNetworkUsageDescription` (to be added in T8).
 
 ## Blockers
 
-- None. (T0 spike may move embeddings to `501`+v2 — recorded, not blocking.)
+- None. (T0 spike 2026-09-20: embeddings serve `501` in v1, real embeddings v2 — recorded, not blocking.)
 
 ## Handoff Notes
 
