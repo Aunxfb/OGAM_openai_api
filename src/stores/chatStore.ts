@@ -360,6 +360,7 @@ export const useChatStore = create<ChatState>()(
         set({ isThinking: thinking });
       },
 
+      // eslint-disable-next-line max-params
       finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta, turnStatus) => {
         const { streamingMessage, streamingReasoningContent, streamingForConversationId, addMessage } = get();
 

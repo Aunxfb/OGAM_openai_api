@@ -1,5 +1,7 @@
 import { RNLlamaOAICompatibleMessage, RNLlamaMessagePart } from 'llama.rn';
+import RNFS from 'react-native-fs';
 import { Message, MediaAttachment } from '../types';
+import logger from '../utils/logger';
 
 /**
  * PRODUCT RULE: every voice note is transcribed (whisper) and ONLY its transcript is sent to the
@@ -98,4 +100,36 @@ export function buildOAIMessages(messages: Message[], supportsAudio = false): RN
     if (!hasImage && !hasAudio) return { role: message.role, content: message.content };
     return { role: message.role, content: buildMediaParts(message, supportsAudio) };
   });
+}
+
+/** No-op pass-through — lets llama.rn's native ctx_shift handle overflow for KV cache reuse. */
+export async function manageContextWindow(messages: Message[], _extraReserve = 0): Promise<Message[]> {
+  return messages;
+}
+
+/**
+ * Drop image attachments whose files no longer exist before they reach the native
+ * layer. A generated image's uri is a temp/cache path that gets cleaned up, so once
+ * it's in the conversation history EVERY later turn (even a voice note) flips to
+ * VISION mode and the native completion throws, killing the whole turn (silent
+ * empty bubble). Validating file inputs at this boundary is the generation layer's
+ * own responsibility — a missing image is simply not sent, so the turn runs
+ * (TEXT-ONLY if none remain) instead of crashing.
+ */
+export async function dropMissingImageAttachments(messages: Message[]): Promise<Message[]> {
+  const out: Message[] = [];
+  for (const m of messages) {
+    const attachments = m.attachments;
+    if (!attachments?.some(a => a.type === 'image')) { out.push(m); continue; }
+    const kept: typeof attachments = [];
+    for (const a of attachments) {
+      if (a.type !== 'image') { kept.push(a); continue; }
+      const path = (a.uri || '').replace(/^file:\/\//, '');
+      const exists = path.length > 0 && await RNFS.exists(path).catch(() => false);
+      if (exists) kept.push(a);
+      else logger.warn(`[LLM] dropping missing image attachment (file gone): ${a.uri}`);
+    }
+    out.push(kept.length === attachments.length ? m : { ...m, attachments: kept });
+  }
+  return out;
 }

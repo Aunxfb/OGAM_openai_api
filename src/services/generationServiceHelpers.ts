@@ -4,19 +4,37 @@ import { llmService } from './llm';
 import { liteRTService } from './litert';
 import { getActiveEngineService, prepareActiveConversation } from './engines';
 import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
-import type { Message, GenerationMeta } from '../types';
-import { runToolLoop, buildLiteRTHistory } from './generationToolLoop';
+import type { Message, GenerationMeta, MediaAttachment } from '../types';
 import { effectiveCacheType } from './llmHelpers';
-import { modelInputImageUris, modelInputAudioUris } from './modelMedia';
 import { clearModelFailure } from './modelFailureHandler';
 import type { ToolResult } from './tools/types';
-import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
+import { activeModelService } from './activeModelService';
+import { remoteServerManager } from './remoteServerManager';
+import { contextCompactionService } from './contextCompaction';
+import {
+  buildLiteRTMeta,
+  runLiteRTResponseImpl,
+} from './generationServiceLiteRT';
 
-const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
+export const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
+
+export type StreamChunk = string | { content?: string; reasoningContent?: string };
+export type FallbackRoute =
+  | { kind: 'remote'; serverId: string; id: string; name: string }
+  | { kind: 'local'; id: string; name: string };
+
+export interface QueuedMessage {
+  id: string; conversationId: string; text: string;
+  attachments?: MediaAttachment[]; messageText: string;
+  /** The modality the user forced for THIS send (force/disabled/auto). Carried through the queue so a
+   *  message the user explicitly forced to image mode is dispatched as image on drain â€” never re-decided
+   *  at 'auto' by resolveTurnKind (#510: a queued force-image send generated as text). */
+  imageMode?: 'auto' | 'force' | 'disabled';
+}
 
 /**
- * Keep whatever the user has ALREADY seen when a generation errors mid-stream — never discard shown output
+ * Keep whatever the user has ALREADY seen when a generation errors mid-stream â€” never discard shown output
  * (device 2026-07-14, the Stop-drops-partial principle extended to the error path, for llama/litert/remote
  * alike). Flush any buffered tokens to the store, then finalizeStreamingMessage: it persists content OR
  * reasoning and resets the streaming state either way (a strict superset of clearStreamingMessage; an empty
@@ -40,7 +58,6 @@ export function keepShownPartialOnError(svc: any, conversationId: string): void 
     );
   svc.resetState();
 }
-type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 /** Returns true when the currently active model uses LiteRT engine. */
 function isLiteRTActive(): boolean {
@@ -72,42 +89,6 @@ export interface GenerationWithToolsRequest {
   };
 }
 
-function buildLiteRTMeta(
-  svc: any,
-  modelName: string | undefined,
-): GenerationMeta {
-  const backend = liteRTService.getActiveBackend() ?? 'cpu';
-  const stats =
-    svc.liteRTBenchmarkStats ?? liteRTService.getLastBenchmarkStats();
-  if (stats) {
-    return {
-      gpu: backend !== 'cpu',
-      gpuBackend: backend.toUpperCase(),
-      modelName,
-      decodeTokensPerSecond: stats.decodeTokensPerSecond,
-      prefillTokensPerSecond: stats.prefillTokensPerSecond,
-      timeToFirstToken: stats.ttft,
-      tokenCount: stats.prefillTokenCount,
-      modelLoadTimeSeconds:
-        stats.initTimeSeconds > 0 ? stats.initTimeSeconds : undefined,
-    };
-  }
-  const contentLength = svc.state.streamingContent?.length ?? 0;
-  const estimatedTokenCount = Math.ceil(contentLength / 4);
-  const genTime = svc.state.startTime
-    ? (Date.now() - svc.state.startTime) / 1000
-    : 0;
-  return {
-    gpu: backend !== 'cpu',
-    gpuBackend: backend.toUpperCase(),
-    modelName,
-    tokenCount: estimatedTokenCount,
-    tokensPerSecond:
-      genTime > 0 && estimatedTokenCount > 0
-        ? estimatedTokenCount / genTime
-        : undefined,
-  };
-}
 
 export function buildGenerationMetaImpl(svc: any): GenerationMeta {
   const meta = buildBaseGenerationMeta(svc);
@@ -243,7 +224,7 @@ async function checkProviderReadiness(svc: any): Promise<string | null> {
   } else {
     if (!llmService.isModelLoaded()) return 'No model loaded';
     // A still-unwinding completion (a stop can only take effect once prefill finishes) is NOT an
-    // error — wait for the engine to go idle instead of failing the user's send. Only a genuinely
+    // error â€” wait for the engine to go idle instead of failing the user's send. Only a genuinely
     // stuck/concurrent generation (still busy after the bounded wait) surfaces the busy error.
     if (llmService.isCurrentlyGenerating() && !(await llmService.waitForIdle()))
       return 'LLM service busy';
@@ -258,7 +239,7 @@ export async function prepareGenerationImpl(
   if (svc.state.isGenerating) return false;
   // A NEW attempt owns the text failure surface: clear any card left by a previous failed/stopped
   // attempt at the ONE dispatch seam every path (send/retry/regenerate, local/remote, with/without
-  // tools) funnels through — a stale card must never sit next to a live stream (device IMG 00:23).
+  // tools) funnels through â€” a stale card must never sit next to a live stream (device IMG 00:23).
   clearModelFailure('text');
   svc.updateState({
     isGenerating: true,
@@ -295,134 +276,6 @@ export async function prepareGenerationImpl(
   return true;
 }
 
-function assertLiteRTImageSupport(
-  imageUris: string[] | undefined,
-  svc: any,
-  chatStore: ReturnType<typeof useChatStore.getState>,
-): void {
-  if (!imageUris || imageUris.length === 0) return;
-  const { downloadedModels, activeModelId } = useAppStore.getState();
-  const activeModel = downloadedModels.find((m: any) => m.id === activeModelId);
-  const liteRTActiveModel =
-    activeModel?.engine === 'litert' ? activeModel : null;
-  if (!liteRTActiveModel?.liteRTVision) {
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    throw new Error(
-      'This model does not support images. Import it with vision enabled, or remove the image.',
-    );
-  }
-}
-
-// assertLiteRTAudioSupport removed: audio is transcript-only (modelInputAudioUris always []), so it
-// only ever wrongly hard-rejected a non-audio LiteRT model carrying a voice note. Re-gate at modelMedia.
-
-async function runLiteRTResponseImpl(
-  svc: any,
-  req: GenerationRequest,
-): Promise<void> {
-  const { conversationId, messages, onFirstToken } = req;
-  const chatStore = useChatStore.getState();
-  let firstTokenReceived = false;
-  let jsTtftSeconds: number | undefined;
-
-  const lastUser = [...messages].reverse().find(m => m.role === 'user');
-  if (!lastUser) {
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    return;
-  }
-  const systemMsg = messages.find(m => m.role === 'system');
-  const systemPrompt =
-    typeof systemMsg?.content === 'string' ? systemMsg.content : '';
-  const allAttachments = lastUser.attachments ?? [];
-  // Single source of truth (modelMedia): images may be model input; a voice note is transcript-only
-  // (audioUris ALWAYS empty — transcript is already in lastUser.content), matching the llama/OAI path.
-  const imageUris = modelInputImageUris(allAttachments);
-  const audioUris = modelInputAudioUris(allAttachments);
-
-  assertLiteRTImageSupport(imageUris, svc, chatStore);
-
-  const history = buildLiteRTHistory(messages);
-
-  try {
-    const { settings } = useAppStore.getState();
-    await liteRTService.prepareConversation(conversationId, systemPrompt, {
-      samplerConfig: {
-        temperature: settings.liteRTTemperature,
-        topP: settings.liteRTTopP,
-      },
-      history,
-    });
-
-    await liteRTService.sendMessage(
-      typeof lastUser.content === 'string' ? lastUser.content : '',
-      {
-        onToken: (token: string) => {
-          if (svc.abortRequested) return;
-          if (jsTtftSeconds === undefined && svc.state.startTime) {
-            jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
-          }
-          if (!firstTokenReceived) {
-            firstTokenReceived = true;
-            svc.updateState({ isThinking: false });
-            onFirstToken?.();
-          }
-          svc.state.streamingContent += token;
-          svc.tokenBuffer += token;
-          if (!svc.flushTimer) {
-            svc.flushTimer = setTimeout(
-              () => svc.flushTokenBuffer(),
-              FLUSH_INTERVAL_MS,
-            );
-          }
-        },
-        onReasoning: (token: string) => {
-          if (svc.abortRequested) return;
-          // Capture TTFT on first thinking token so it reflects time-to-first-visible-output
-          if (jsTtftSeconds === undefined && svc.state.startTime) {
-            jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
-          }
-          svc.reasoningBuffer += token;
-          if (!svc.flushTimer) {
-            svc.flushTimer = setTimeout(
-              () => svc.flushTokenBuffer(),
-              FLUSH_INTERVAL_MS,
-            );
-          }
-        },
-        onComplete: (_content: string, _reasoning: string, stats) => {
-          if (svc.abortRequested) return;
-          svc.forceFlushTokens();
-          svc.liteRTBenchmarkStats = stats
-            ? { ...stats, ttft: jsTtftSeconds ?? stats.ttft }
-            : stats;
-          const generationTime = svc.state.startTime
-            ? Date.now() - svc.state.startTime
-            : undefined;
-          chatStore.finalizeStreamingMessage(
-            conversationId,
-            generationTime,
-            buildGenerationMetaImpl(svc),
-          );
-          svc.checkSharePrompt();
-          svc.resetState();
-        },
-        onError: (err: Error) => {
-          if (svc.abortRequested) return;
-          logger.error('[LiteRT] sendMessage error:', err.message);
-          if (req.preservePartialOnError === false) throw err;
-          keepShownPartialOnError(svc, conversationId); // keep the partial the user already saw
-        },
-      },
-      { imageUris, audioUris },
-    );
-  } catch (error: any) {
-    if (svc.abortRequested) return;
-    if (req.preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);
-    throw error;
-  }
-}
 
 export async function generateResponseImpl(
   svc: any,
@@ -439,7 +292,7 @@ export async function generateResponseImpl(
   const chatStore = useChatStore.getState();
   let firstTokenReceived = false;
 
-  // llama.cpp path — unchanged
+  // llama.cpp path â€” unchanged
   try {
     await llmService.generateResponse(messages, {
       onStream: data => {
@@ -468,7 +321,7 @@ export async function generateResponseImpl(
         }
       },
       onComplete: () => {
-        // If aborted, stopGeneration() already handled cleanup — don't clobber new generation state.
+        // If aborted, stopGeneration() already handled cleanup â€” don't clobber new generation state.
         if (svc.abortRequested) return;
         svc.forceFlushTokens();
         const generationTime = svc.state.startTime
@@ -491,175 +344,105 @@ export async function generateResponseImpl(
   }
 }
 
-export async function generateRemoteResponseImpl(
-  svc: any,
-  req: GenerationRequest,
-): Promise<void> {
-  const { conversationId, messages, onFirstToken } = req;
-  if (!(await prepareGenerationImpl(svc, conversationId))) return;
-  const chatStore = useChatStore.getState();
-  const provider = svc.getCurrentProvider();
 
-  if (!provider) {
-    svc.resetState();
-    throw new Error('No remote provider available');
-  }
-  let firstTokenReceived = false;
-  svc.remoteTimeToFirstToken = undefined;
 
-  svc.currentRemoteAbortController = new AbortController();
-  // Capture signal per-generation so callbacks stay guarded even after
-  // abortRequested is reset by the next generation's prepareGeneration().
-  const { signal: generationSignal } = svc.currentRemoteAbortController;
-
-  const { temperature, maxTokens, topP, thinkingEnabled } =
-    useAppStore.getState().settings;
-  const options: GenerationOptions = {
-    temperature,
-    maxTokens,
-    topP,
-    stopSequences: [],
-    enableThinking: thinkingEnabled && provider.capabilities.supportsThinking,
-  };
-
-  try {
-    await provider.generate(messages, options, {
-      onToken: (token: string) => {
-        if (generationSignal.aborted) return;
-        if (!firstTokenReceived) {
-          firstTokenReceived = true;
-          svc.remoteTimeToFirstToken = svc.state.startTime
-            ? (Date.now() - svc.state.startTime) / 1000
-            : undefined;
-          svc.updateState({ isThinking: false });
-          onFirstToken?.();
-        }
-        svc.state.streamingContent += token;
-        svc.tokenBuffer += token;
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(
-            () => svc.flushTokenBuffer(),
-            FLUSH_INTERVAL_MS,
-          );
-        }
-      },
-      onReasoning: (content: string) => {
-        if (generationSignal.aborted) return;
-        svc.reasoningBuffer += content;
-        svc.totalReasoningLength += content.length;
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(
-            () => svc.flushTokenBuffer(),
-            FLUSH_INTERVAL_MS,
-          );
-        }
-      },
-      onComplete: (_result: CompletionResult) => {
-        if (generationSignal.aborted) return;
-        svc.forceFlushTokens();
-        const generationTime = svc.state.startTime
-          ? Date.now() - svc.state.startTime
-          : undefined;
-        chatStore.finalizeStreamingMessage(
-          conversationId,
-          generationTime,
-          buildGenerationMetaImpl(svc),
-        );
-        svc.checkSharePrompt();
-        svc.resetState();
-      },
-      onError: (error: Error) => {
-        if (generationSignal.aborted) return;
-        logger.error('[GenerationService] Remote generation error:', error);
-        keepShownPartialOnError(svc, conversationId);
-        throw error;
-      },
-    });
-  } catch (error) {
-    if (generationSignal.aborted) return;
-    logger.error('[GenerationService] Remote generation error:', error);
-    // Mark server as offline so the Remote Servers screen reflects the failure
-    const failedServerId = useRemoteServerStore.getState().activeServerId;
-    if (failedServerId)
-      useRemoteServerStore.getState().updateServerHealth(failedServerId, false);
-    keepShownPartialOnError(svc, conversationId);
-    throw error;
-  } finally {
-    svc.currentRemoteAbortController = null;
-  }
+export function fallbackRoutes(svc: any,messages: Message[]): FallbackRoute[] {
+  const remote = useRemoteServerStore.getState();
+  const local = useAppStore.getState();
+  const startedRemote = svc.isUsingRemoteProvider();
+  const selectedId = startedRemote ? remote.activeRemoteTextModelId : local.activeModelId;
+  const selectedName = startedRemote
+    ? remote.getActiveRemoteTextModel()?.name || selectedId || 'Remote model'
+    : local.downloadedModels.find(model => model.id === selectedId)?.name || 'Local model';
+  const needsVision = messages.some(message =>
+    message.attachments?.some(attachment => attachment.type === 'image'),
+  );
+  const remoteRoutes = startedRemote
+    ? remote.servers.flatMap(server =>
+        (remote.discoveredModels[server.id] || [])
+          .filter(model =>
+            (server.id !== remote.activeServerId || model.id !== selectedId) &&
+            (!needsVision || model.capabilities.supportsVision),
+          )
+          .map(model => ({ kind: 'remote' as const, serverId: server.id, id: model.id, name: model.name })),
+      )
+    : [];
+  const localRoutes = local.downloadedModels
+    .filter(model =>
+      model.id !== selectedId &&
+      (!needsVision || (model.engine === 'litert' ? model.liteRTVision : model.isVisionModel)),
+    )
+    .sort((a, b) => a.fileSize - b.fileSize)
+    .map(model => ({ kind: 'local' as const, id: model.id, name: model.name }));
+  return [
+    startedRemote
+      ? { kind: 'remote', serverId: remote.activeServerId || '', id: selectedId || '', name: selectedName }
+      : { kind: 'local', id: selectedId || '', name: selectedName },
+    ...remoteRoutes,
+    ...localRoutes,
+  ];
 }
 
-export async function generateRemoteWithToolsImpl(
-  svc: any,
-  req: GenerationWithToolsRequest,
-): Promise<void> {
-  const { conversationId, messages, options } = req;
-  logger.log(
-    `[GenService][DEBUG] generateRemoteWithToolsImpl — conv=${conversationId}, messages=${
-      messages.length
-    }, enabledToolIds=[${options.enabledToolIds.join(', ')}]`,
-  );
-  if (!(await prepareGenerationImpl(svc, conversationId))) {
-    logger.log(
-      `[GenService][DEBUG] prepareGeneration returned false, aborting`,
-    );
-    return;
-  }
-  const provider = svc.getCurrentProvider();
-
-  if (!provider) {
-    svc.resetState();
-    throw new Error('No remote provider available');
-  }
-  logger.log(
-    `[GenService][DEBUG] Provider ready — type=${
-      provider.type
-    }, capabilities=${JSON.stringify(provider.capabilities)}`,
-  );
-
-  const { enabledToolIds, projectId, ...callbacks } = options;
-
-  try {
-    // Use the same tool loop but with remote provider
-    await runToolLoop({
-      conversationId,
-      messages,
-      enabledToolIds,
-      projectId,
-      callbacks,
-      ...buildToolLoopHandlersImpl(svc),
-      forceRemote: true,
-    });
-
-    if (svc.abortRequested) {
-      logger.log(
-        `[GenService][DEBUG] Generation was aborted, skipping finalize`,
-      );
-    } else {
-      svc.forceFlushTokens();
-      const generationTime = svc.state.startTime
-        ? Date.now() - svc.state.startTime
-        : undefined;
-      logger.log(
-        `[GenService][DEBUG] Finalizing — streamingContent length=${
-          svc.state.streamingContent?.length || 0
-        }, generationTime=${generationTime}ms`,
-      );
-      useChatStore
-        .getState()
-        .finalizeStreamingMessage(
-          conversationId,
-          generationTime,
-          buildGenerationMetaImpl(svc),
-        );
-      svc.checkSharePrompt();
-      svc.resetState();
+// eslint-disable-next-line max-params
+export async function withModelFallback<T>(svc: any,
+  conversationId: string,
+  messages: Message[],
+  run: (route: FallbackRoute, prepared: boolean) => Promise<T>,
+  canRetry: () => boolean = () => true,
+): Promise<T | void> {
+  const routes = fallbackRoutes(svc, messages);
+  let failedName = routes[0].name;
+  let lastError: unknown;
+  let prepared = false;
+  for (let index = 0; index < routes.length; index += 1) {
+    const route = routes[index];
+    if (index > 0) {
+      try {
+        if (route.kind === 'remote') {
+          await remoteServerManager.setActiveRemoteTextModel(route.serverId, route.id);
+        } else {
+          await activeModelService.loadTextModel(route.id);
+          if (svc.abortRequested) return;
+          await prepareActiveConversation(conversationId);
+          if (svc.abortRequested) return;
+          remoteServerManager.clearActiveRemoteTextModel();
+        }
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
+      if (svc.abortRequested) return;
+      if (svc.state.isGenerating) {
+        svc.forceFlushTokens();
+        useChatStore.getState().resetStreamingSegment();
+        svc.updateState({ streamingContent: '', isThinking: true, startTime: Date.now() });
+      }
+      svc.tokenBuffer = '';
+      svc.reasoningBuffer = '';
+      svc.totalReasoningLength = 0;
+      svc.remoteTimeToFirstToken = undefined;
+      useChatStore.getState().addMessage(conversationId, {
+        role: 'tool', toolName: 'model_fallback',
+        content: `${failedName} could not answer. Trying ${route.name}.`,
+      });
+      prepared = svc.state.isGenerating;
     }
-  } catch (error) {
-    if (svc.abortRequested) return;
-    logger.error('[GenerationService] Remote tool generation error:', error);
-    // Reset generating state on error, else isGenerating stays stuck → red stop, next send blocked (2026-07-14).
-    keepShownPartialOnError(svc, conversationId);
-    throw error;
+    try {
+      return await run(route, prepared);
+    } catch (error) {
+      if (svc.abortRequested) return;
+      if (contextCompactionService.isContextFullError(error)) {
+        keepShownPartialOnError(svc, conversationId);
+        throw error;
+      }
+      logger.warn(
+        `[GenerationService] ${route.name} failed before model fallback: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      lastError = error;
+      failedName = route.name;
+      if (!canRetry()) break;
+    }
   }
+  if (svc.state.isGenerating) keepShownPartialOnError(svc, conversationId);
+  throw lastError;
 }

@@ -1,14 +1,11 @@
 /** GenerationService - Handles LLM generation independently of UI lifecycle */
 import { llmService } from './llm';
-import { getActiveEngineService, prepareActiveConversation, stopAllTextEngines } from './engines';
-import { activeModelService } from './activeModelService';
-import { remoteServerManager } from './remoteServerManager';
+import { getActiveEngineService, stopAllTextEngines } from './engines';
 import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
-import { Message, GenerationMeta, MediaAttachment } from '../types';
+import { Message, GenerationMeta } from '../types';
 import { runToolLoop } from './generationToolLoop';
 import type { ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
-import { contextCompactionService } from './contextCompaction';
 import logger from '../utils/logger';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
 import { checkProPromptForText } from './proPrompt';
@@ -17,27 +14,18 @@ import {
   buildToolLoopHandlersImpl,
   prepareGenerationImpl,
   generateResponseImpl,
-  keepShownPartialOnError,
   type GenerationRequest,
+  type GenerationWithToolsRequest,
+  type StreamChunk,
+  type QueuedMessage,
+} from './generationServiceHelpers';
+import { withModelFallback } from './generationServiceHelpers';
+import {
   generateRemoteResponseImpl,
   generateRemoteWithToolsImpl,
-  type GenerationWithToolsRequest,
-} from './generationServiceHelpers';
+} from './generationServiceRemote';
 
 const SHARE_PROMPT_DELAY_MS = 1500;
-type StreamChunk = string | { content?: string; reasoningContent?: string };
-type FallbackRoute =
-  | { kind: 'remote'; serverId: string; id: string; name: string }
-  | { kind: 'local'; id: string; name: string };
-
-export interface QueuedMessage {
-  id: string; conversationId: string; text: string;
-  attachments?: MediaAttachment[]; messageText: string;
-  /** The modality the user forced for THIS send (force/disabled/auto). Carried through the queue so a
-   *  message the user explicitly forced to image mode is dispatched as image on drain — never re-decided
-   *  at 'auto' by resolveTurnKind (#510: a queued force-image send generated as text). */
-  imageMode?: 'auto' | 'force' | 'disabled';
-}
 
 export interface GenerationState {
   isGenerating: boolean;
@@ -160,7 +148,7 @@ class GenerationService {
     contextUsage?: GenerationRequest['contextUsage'],
   ): Promise<void> {
     logger.log(`[REMOTE-SM] generateResponse entry conv=${conversationId} msgs=${messages.length}`);
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
+    return withModelFallback(this, conversationId, messages, async (route, prepared) => {
       const request = { conversationId, messages, onFirstToken, contextUsage,
         prepared, preservePartialOnError: false };
       if (route.kind === 'remote') await generateRemoteResponseImpl(this, request);
@@ -168,105 +156,6 @@ class GenerationService {
     });
   }
 
-  private fallbackRoutes(messages: Message[]): FallbackRoute[] {
-    const remote = useRemoteServerStore.getState();
-    const local = useAppStore.getState();
-    const startedRemote = this.isUsingRemoteProvider();
-    const selectedId = startedRemote ? remote.activeRemoteTextModelId : local.activeModelId;
-    const selectedName = startedRemote
-      ? remote.getActiveRemoteTextModel()?.name || selectedId || 'Remote model'
-      : local.downloadedModels.find(model => model.id === selectedId)?.name || 'Local model';
-    const needsVision = messages.some(message =>
-      message.attachments?.some(attachment => attachment.type === 'image'),
-    );
-    const remoteRoutes = startedRemote
-      ? remote.servers.flatMap(server =>
-          (remote.discoveredModels[server.id] || [])
-            .filter(model =>
-              (server.id !== remote.activeServerId || model.id !== selectedId) &&
-              (!needsVision || model.capabilities.supportsVision),
-            )
-            .map(model => ({ kind: 'remote' as const, serverId: server.id, id: model.id, name: model.name })),
-        )
-      : [];
-    const localRoutes = local.downloadedModels
-      .filter(model =>
-        model.id !== selectedId &&
-        (!needsVision || (model.engine === 'litert' ? model.liteRTVision : model.isVisionModel)),
-      )
-      .sort((a, b) => a.fileSize - b.fileSize)
-      .map(model => ({ kind: 'local' as const, id: model.id, name: model.name }));
-    return [
-      startedRemote
-        ? { kind: 'remote', serverId: remote.activeServerId || '', id: selectedId || '', name: selectedName }
-        : { kind: 'local', id: selectedId || '', name: selectedName },
-      ...remoteRoutes,
-      ...localRoutes,
-    ];
-  }
-
-  private async withModelFallback<T>(
-    conversationId: string,
-    messages: Message[],
-    run: (route: FallbackRoute, prepared: boolean) => Promise<T>,
-    canRetry: () => boolean = () => true,
-  ): Promise<T | void> {
-    const routes = this.fallbackRoutes(messages);
-    let failedName = routes[0].name;
-    let lastError: unknown;
-    let prepared = false;
-    for (let index = 0; index < routes.length; index += 1) {
-      const route = routes[index];
-      if (index > 0) {
-        try {
-          if (route.kind === 'remote') {
-            await remoteServerManager.setActiveRemoteTextModel(route.serverId, route.id);
-          } else {
-            await activeModelService.loadTextModel(route.id);
-            if (this.abortRequested) return;
-            await prepareActiveConversation(conversationId);
-            if (this.abortRequested) return;
-            remoteServerManager.clearActiveRemoteTextModel();
-          }
-        } catch (error) {
-          lastError = error;
-          continue;
-        }
-        if (this.abortRequested) return;
-        if (this.state.isGenerating) {
-          this.forceFlushTokens();
-          useChatStore.getState().resetStreamingSegment();
-          this.updateState({ streamingContent: '', isThinking: true, startTime: Date.now() });
-        }
-        this.tokenBuffer = '';
-        this.reasoningBuffer = '';
-        this.totalReasoningLength = 0;
-        this.remoteTimeToFirstToken = undefined;
-        useChatStore.getState().addMessage(conversationId, {
-          role: 'tool', toolName: 'model_fallback',
-          content: `${failedName} could not answer. Trying ${route.name}.`,
-        });
-        prepared = this.state.isGenerating;
-      }
-      try {
-        return await run(route, prepared);
-      } catch (error) {
-        if (this.abortRequested) return;
-        if (contextCompactionService.isContextFullError(error)) {
-          keepShownPartialOnError(this, conversationId);
-          throw error;
-        }
-        logger.warn(
-          `[GenerationService] ${route.name} failed before model fallback: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        lastError = error;
-        failedName = route.name;
-        if (!canRetry()) break;
-      }
-    }
-    if (this.state.isGenerating) keepShownPartialOnError(this, conversationId);
-    throw lastError;
-  }
 
   /** Generate a response with tool calling support (LLM → tools → repeat, max 5 iterations). */
   async generateWithTools(
@@ -293,7 +182,7 @@ class GenerationService {
         options.onToolCallComplete?.(name, result);
       },
     };
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
+    return withModelFallback(this, conversationId, messages, async (route, prepared) => {
       if (route.kind === 'remote') {
         return generateRemoteWithToolsImpl(this, {
           conversationId, messages,

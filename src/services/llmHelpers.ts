@@ -103,10 +103,7 @@ export function buildModelParams(
       // per-arch default (false) handles SWA models correctly and keeps GPU/Metal.
       no_extra_bufts: false,
       // MTP speculative decoding, enabled at CONTEXT CREATION (llama.rn's NativeContextParams) —
-      // it changes how the graph is built, so it cannot be toggled per completion. No draft model
-      // is named on purpose: MTP models carry their own draft layers, and llama.rn falls back to
-      // the target model's embedded ones when `draft` is omitted. A model without MTP weights
-      // simply never drafts, so the flag is safe to leave on for models that can't use it.
+      // MTP models carry their own draft layers; models without MTP weights simply never draft.
       ...(settings.speculativeDecoding ? { speculative: { enabled: true, type: 'mtp' as const } } : {}),
       ...(backend === INFERENCE_BACKENDS.OPENCL ? {} : { cache_type_k: cacheType, cache_type_v: cacheType }),
     },

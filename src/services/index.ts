@@ -14,7 +14,7 @@ export { backgroundDownloadService } from './backgroundDownloadService';
 export { activeModelService } from './activeModelService';
 export type { ResourceUsage } from './activeModelService/types';
 export { generationService } from './generationService';
-export type { QueuedMessage } from './generationService';
+export type { QueuedMessage } from './generationServiceHelpers';
 export { imageGenerationService } from './imageGenerationService';
 export type { ImageGenerationState } from './imageGenerationService';
 ;

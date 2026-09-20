@@ -12,10 +12,12 @@
 
 import {
   generateResponseImpl,
-  generateRemoteWithToolsImpl,
-  generateRemoteResponseImpl,
   buildToolLoopHandlersImpl,
 } from '../../../src/services/generationServiceHelpers';
+import {
+  generateRemoteWithToolsImpl,
+  generateRemoteResponseImpl,
+} from '../../../src/services/generationServiceRemote';
 
 jest.mock('../../../src/services/llm', () => ({
   llmService: {

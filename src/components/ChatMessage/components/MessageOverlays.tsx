@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTheme } from '../../../theme';
 import { CustomAlert, AlertState } from '../../CustomAlert';
-import { ActionMenuSheet, EditSheet } from './ActionMenuSheet';
+import { ActionMenuSheet, EditSheet, SelectTextSheet } from './ActionMenuSheet';
 import { createStyles } from '../styles';
 import type { Message } from '../../../types';
 
@@ -56,6 +56,13 @@ export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
       onRetry={onRetry}
       onGenerateImage={onGenerateImage}
       onSpeak={onSpeak}
+      onSelectText={showSelectTextAction ? onSelectText : undefined}
+    />
+    <SelectTextSheet
+      visible={showSelectText}
+      onClose={onCloseSelectText}
+      content={displayContent}
+      styles={styles}
     />
     <EditSheet
       visible={isEditing}
