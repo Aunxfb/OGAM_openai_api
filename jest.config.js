@@ -29,6 +29,12 @@ const proDependentTestPaths = [
   '__tests__/rntl/components/McpAddServerSheet.test.tsx',
   '__tests__/rntl/components/McpServersScreen.test.tsx',
   '__tests__/unit/tools/mcpPresets.test.ts',
+  // These import pro via RELATIVE ../../pro paths (not the @offgrid/pro alias), so the
+  // proStub mapper can't cover them — ignore individually, same condition.
+  '__tests__/hardening/batch5-kokoroDownloadError.test.ts',
+  '__tests__/hardening/batch5-playbackPausePreparing.test.ts',
+  '__tests__/hardening/batch5-speakMessageStateMachine.test.ts',
+  '__tests__/integration/voiceDownloadManagerRouting.test.tsx',
 ];
 
 module.exports = {
