@@ -147,17 +147,17 @@ since upstream:
 | `.ts` / `.tsx` / `.js` / `.jsx` | eslint, `tsc --noEmit`, `jest --findRelatedTests`, `npm run depcruise`, `npm run knip` |
 | `.swift` | SwiftLint, `npm run test:ios` |
 | `.kt` / `.kts` | `compileDebugKotlin`, `lintDebug`, `npm run test:android` |
-| `.kt` / `.kts` · `android/` · `package*.json` | **Android build** `./gradlew assembleDebug assembleRelease` |
-| `.swift` · `ios/` · `Podfile` | **iOS build** (simulator, `CODE_SIGNING_ALLOWED=NO`) |
 
-**The native builds are a LOCAL pre-push gate, NOT in CI.** The hosted `android-build` CI job hung for
-3+ hours on the native C++ builds and was removed; both builds now run on push (scoped above so JS-only
-/ docs pushes stay fast). CI keeps lint / typecheck / test / architecture / SonarCloud / CodeRabbit.
+**Full native builds do NOT gate pushes.** They cannot run on every machine (no Xcode on
+Windows/Linux), and the hosted `android-build` CI job was removed after hanging 3+ hours on the
+native C++ builds. When the merge gate needs a build, run it manually: Android via
+`(cd android && ./gradlew assembleDebug assembleRelease)` (~14 min), iOS via
+`scripts/ios-device.sh` (see the on-device playbook below). CI keeps lint / typecheck / test /
+architecture / SonarCloud / CodeRabbit.
 
 **Requirements:**
 - SwiftLint: `brew install swiftlint` (skipped with a warning if not installed)
-- Android checks require the Gradle wrapper in `android/`; the iOS build needs a booted-or-available
-  simulator SDK. Verified locally: `assembleDebug assembleRelease` produces both APKs (~14 min).
+- Android lint/test require the Gradle wrapper in `android/`.
 
 **Workflow implication (TDD / adversarial red-first):** write a failing test, commit it red (commit is
 free), then drive it green; the branch must be green before `git push` (the gate blocks a red push).
@@ -233,7 +233,7 @@ here: the vision fix worked on iOS yet needed separate Android verification. Ful
 1. Real-boundary integration test (below) — green.
 2. On-device e2e on **both** platforms — reproduce the real user flow, confirm via the device log/UI.
 3. `/hygiene` audit — pass.
-4. CI all green: lint, typecheck, test, architecture, android-build, SonarCloud, CodeRabbit.
+4. CI all green: lint, typecheck, test, architecture, SonarCloud, CodeRabbit.
 
 ## Driving the devices yourself (no Provit journey engine)
 - **iOS (physical):** drive **WebDriverAgent (WDA) directly over HTTP**. Bring the WDA server up with

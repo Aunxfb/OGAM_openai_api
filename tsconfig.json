@@ -11,9 +11,17 @@
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": [
     "**/node_modules", "**/Pods", "pro/**",
-    // Tests that import the private pro/ submodule, which the public repo's CI does
-    // not check out — so tsc cannot resolve their imports there. Keep in lockstep
+    // Reference-only vendored code (never built, deps never installed) — must
+    // never gate pushes.
+    "third_party/**",
+    // Tests that import the private pro/ submodule, which may not be checked
+    // out locally — so tsc cannot resolve their imports there. Keep in lockstep
     // with jest.config.js testPathIgnorePatterns; both lists exclude the same set.
+    "__tests__/pro/**",
+    "__tests__/hardening/batch5-kokoroDownloadError.test.ts",
+    "__tests__/hardening/batch5-playbackPausePreparing.test.ts",
+    "__tests__/hardening/batch5-speakMessageStateMachine.test.ts",
+    "__tests__/integration/voiceDownloadManagerRouting.test.tsx",
     "__tests__/unit/audio/**",
     "__tests__/integration/audio/**",
     "__tests__/unit/engine/**",
