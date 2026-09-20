@@ -11,8 +11,8 @@ import {
   LiteRTBackendSelector,
   ModelLoadingModeSelector,
   ShowGenerationDetailsToggle,
-  SpeculativeDecodingToggle,
 } from '../../components/settings/textGenAdvancedSections';
+import { SpeculativeDecodingToggle } from '../../components/settings/SpeculativeDecodingToggle';
 import { useTextGenerationSettings } from '../../hooks/useTextGenerationSettings';
 import { useThemedStyles } from '../../theme';
 import { createStyles } from './styles';

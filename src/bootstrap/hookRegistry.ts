@@ -39,6 +39,8 @@ export const HOOKS = {
   /** () => Promise<void> | undefined — stop the active task tool run, if any.
    *  Fired with text/image stops so one Stop press ends everything in flight. */
   taskStopActive: 'task.stopActive',
+  /** (content: string, timestamp: number) => void — record locally-copied text. */
+  clipboardRecordLocalText: 'clipboard.recordLocalText',
   /** (content: string) => void — fired as the assistant message streams; pro
    *  uses it to synthesize/play speech sentence-by-sentence while generation is
    *  still in progress (no-op unless voice mode + engine ready). */

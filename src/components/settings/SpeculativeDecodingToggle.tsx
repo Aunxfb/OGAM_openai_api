@@ -19,8 +19,8 @@ export const SpeculativeDecodingToggle: React.FC = () => {
       description="Drafts several tokens per step and checks them together. Faster on models built with MTP layers; no effect on others. Requires model reload."
       options={BOOL_OPTIONS}
       current={settings.speculativeDecoding ? 'on' : 'off'}
-      onSelect={(id) => updateSettings({ speculativeDecoding: id === 'on' })}
-      testIdFor={(id) => `speculative-${id}-button`}
+      onSelect={(id: 'off' | 'on') => updateSettings({ speculativeDecoding: id === 'on' })}
+      testIdFor={(id: 'off' | 'on') => `speculative-${id}-button`}
     />
   );
 };

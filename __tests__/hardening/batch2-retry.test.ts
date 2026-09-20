@@ -67,6 +67,7 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
       makeGenDeps({ activeConversationId: convId }),
       {
         activeConversationId: convId,
+      activeConversation: useChatStore.getState().conversations.find(c => c.id === convId),
         hasActiveModel: true,
         deleteMessagesAfter,
         setDebugInfo: jest.fn(),
@@ -98,6 +99,7 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
       makeGenDeps({ activeConversationId: convId }),
       {
         activeConversationId: convId,
+      activeConversation: useChatStore.getState().conversations.find(c => c.id === convId),
         hasActiveModel: true,
         deleteMessagesAfter,
         setDebugInfo: jest.fn(),
@@ -119,6 +121,7 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
 
     const params = () => ({
       activeConversationId: convId,
+      activeConversation: useChatStore.getState().conversations.find(c => c.id === convId),
       hasActiveModel: true,
       deleteMessagesAfter: (c: string, m: string) => useChatStore.getState().deleteMessagesAfter(c, m),
       setDebugInfo: jest.fn(),
@@ -140,6 +143,7 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
 
     await handleRetryMessageFn(userMsg, genDeps, {
       activeConversationId: convId,
+      activeConversation: useChatStore.getState().conversations.find(c => c.id === convId),
       hasActiveModel: false,
       deleteMessagesAfter: jest.fn(),
       setDebugInfo: jest.fn(),

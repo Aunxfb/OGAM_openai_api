@@ -17,8 +17,8 @@ import {
   LiteRTBackendSelector,
   ModelLoadingModeSelector,
   ShowGenerationDetailsToggle,
-  SpeculativeDecodingToggle,
 } from '../settings/textGenAdvancedSections';
+import { SpeculativeDecodingToggle } from '../settings/SpeculativeDecodingToggle';
 
 const ChatSettingSlider: React.FC<{ setting: NumericSettingModel }> = ({
   setting,

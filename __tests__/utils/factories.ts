@@ -55,6 +55,10 @@ export interface MessageFactoryOptions {
   toolCallId?: string;
   toolCalls?: Array<{ id?: string; name: string; arguments: string }>;
   toolName?: string;
+  toolArtifacts?: Array<{ name: string; result: string; status?: string }>;
+  turnStatus?: 'cancelled';
+  uuid?: string;
+  provenance?: { originDeviceId?: string | null };
   reasoningContent?: string;
 }
 
@@ -72,6 +76,10 @@ export const createMessage = (options: MessageFactoryOptions = {}): Message => (
   toolCallId: options.toolCallId,
   toolCalls: options.toolCalls,
   toolName: options.toolName,
+  toolArtifacts: options.toolArtifacts,
+  turnStatus: options.turnStatus,
+  uuid: options.uuid,
+  provenance: options.provenance,
   reasoningContent: options.reasoningContent,
 });
 

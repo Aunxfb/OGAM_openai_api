@@ -22,7 +22,7 @@ const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
  * reasoning and resets the streaming state either way (a strict superset of clearStreamingMessage; an empty
  * stream just resets, adding no message). Mirrors GenerationService.keepShownPartialOrClear on the stop path.
  */
-function keepShownPartialOnError(svc: any, conversationId: string): void {
+export function keepShownPartialOnError(svc: any, conversationId: string): void {
   if (svc.flushTimer) {
     clearTimeout(svc.flushTimer);
     svc.flushTimer = null;

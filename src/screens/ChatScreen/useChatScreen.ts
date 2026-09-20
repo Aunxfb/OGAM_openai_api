@@ -304,7 +304,7 @@ export const useChatScreen = () => {
     }),
     [activeConversation?.messages, isThinking, hasStreamingText,
       isStreamingForThisConversation, isModelLoading, loadingModel?.name,
-      isGeneratingForThisConversation, remotePreviews, localDeviceId],
+      isGeneratingForThisConversation, localDeviceId],
   );
 
   const animateLastN = useChatPresentationLifecycle(

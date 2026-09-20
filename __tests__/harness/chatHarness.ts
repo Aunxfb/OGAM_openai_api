@@ -247,6 +247,30 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     },
 
     /**
+     * Press the stop control on the image progress card.
+     *
+     * That control has NO testID, so it is reached structurally - the pressable ancestor of the
+     * card's "x". The count is asserted first, so if a second "x" control ever shares the screen
+     * this fails loudly instead of quietly pressing the wrong thing.
+     */
+    async pressImageCardStop() {
+      type PressNode = { type?: unknown; props?: Record<string, unknown>; parent?: PressNode | null };
+      await rtl.act(async () => {
+        const xIcons = this.view!.root.findAll(
+          (n: PressNode) => n.type === 'Icon' && (n.props as { name?: string })?.name === 'x',
+        );
+        expect(xIcons).toHaveLength(1);
+        let node: PressNode | null = xIcons[0] as unknown as PressNode;
+        for (let depth = 0; node && depth < 12; depth++) {
+          const onPress = node.props?.onPress;
+          if (typeof onPress === 'function') { (onPress as () => void)(); return; }
+          node = node.parent ?? null;
+        }
+        throw new Error('the image progress card\'s "x" has no pressable ancestor - the stop control is dead');
+      });
+    },
+
+    /**
      * Gesture-only send: type into the real input + press the real send button, WITHOUT scripting a turn.
      * Use when the test scripts multi-turn native output itself (e.g. boundary.litert.scriptTurns([...]) for
      * a two-pass router). The gesture is identical to send() — only the scripting differs.

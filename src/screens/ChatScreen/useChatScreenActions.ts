@@ -189,6 +189,7 @@ export function useChatScreenActions({
       const currentDeps = generationDepsRef.current ?? generationDeps;
       return handleRetryMessageFn(message, currentDeps, {
         activeConversationId: currentDeps.activeConversationId,
+        activeConversation,
         hasActiveModel: !!currentDeps.hasActiveModel,
         deleteMessagesAfter,
         setDebugInfo,

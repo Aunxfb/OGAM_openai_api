@@ -178,6 +178,17 @@ class RemoteServerManager {
     logger.log('[RemoteServerManager] Cleared active remote model');
   }
 
+  /**
+   * Clear only the active remote TEXT model (used when falling back to a local
+   * text model — a remote image selection, if any, is intentionally kept).
+   */
+  clearActiveRemoteTextModel(): void {
+    const store = useRemoteServerStore.getState();
+    store.setActiveServerId(null);
+    store.setActiveRemoteTextModelId(null);
+    providerRegistry.setActiveProvider('local');
+  }
+
   /** Get the active server */
   getActiveServer(): RemoteServer | null {
     return useRemoteServerStore.getState().getActiveServer();

@@ -39,6 +39,7 @@ describe('handleRetryMessageFn — no active model', () => {
 
     await handleRetryMessageFn(message, genDeps, {
       activeConversationId: 'conv-1',
+      activeConversation: null,
       hasActiveModel: false,
       deleteMessagesAfter: jest.fn(),
       setDebugInfo: jest.fn(),
@@ -56,6 +57,7 @@ describe('handleRetryMessageFn — no active model', () => {
 
     await handleRetryMessageFn(message, genDeps, {
       activeConversationId: null,
+      activeConversation: null,
       hasActiveModel: true,
       deleteMessagesAfter: jest.fn(),
       setDebugInfo: jest.fn(),
@@ -82,6 +84,7 @@ describe('handleEditMessageFn — no active model', () => {
       message,
       newContent: 'edited',
       activeConversationId: 'conv-1',
+      activeConversation: null,
       hasActiveModel: false,
       updateMessageContent: jest.fn(),
       deleteMessagesAfter: jest.fn(),

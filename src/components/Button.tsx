@@ -23,6 +23,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   testID?: string;
+  accessibilityLabel?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -37,6 +38,7 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
   testID,
+  accessibilityLabel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -66,6 +68,8 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       activeOpacity={0.7}
       testID={testID}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityLabel ? 'button' : undefined}
     >
       {loading ? (
         <ActivityIndicator

@@ -21,6 +21,7 @@ import type { Conversation, Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
+import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { MessageRenderer } from './MessageRenderer';
 import { NoModelScreen, ChatHeader } from './ChatScreenComponents';
 import { ChatModalSection } from './ChatModalSection';

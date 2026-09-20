@@ -12,12 +12,14 @@ interface MessageOverlaysProps {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useTheme>['colors'];
   showActionMenu: boolean;
+  showSelectText: boolean;
   isEditing: boolean;
   isUser: boolean;
   canEdit: boolean;
   canRetry: boolean;
   canGenerateImage: boolean;
   canSpeak: boolean;
+  showSelectTextAction: boolean;
   displayContent: string;
   alertState: AlertState;
   onCloseActionMenu: () => void;

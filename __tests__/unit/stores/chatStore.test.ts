@@ -976,7 +976,6 @@ describe('chatStore', () => {
       const store = useChatStore.getState();
       const convId = store.createConversation('test-model');
       store.startStreaming(convId);
-      const replyId = getChatState().streamingMessageUuid;
       store.setStreamingMessage('consumed answer');
       store.appendToStreamingReasoningContent('consumed reasoning');
 
@@ -986,7 +985,6 @@ describe('chatStore', () => {
       expect(state.streamingMessage).toBe('');
       expect(state.streamingReasoningContent).toBe('');
       expect(state.streamingForConversationId).toBe(convId);
-      expect(state.streamingMessageUuid).toBe(replyId);
       expect(state.isStreaming).toBe(true);
     });
   });

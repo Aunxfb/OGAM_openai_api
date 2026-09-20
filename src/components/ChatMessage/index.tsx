@@ -20,6 +20,7 @@ import { MessageOverlays } from './components/MessageOverlays';
 import { MarkdownText } from '../MarkdownText';
 import { formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
+import { useUiModeStore } from '../../stores/uiModeStore';
 import {
   ToolResultMessage,
   ToolCallMessage,
@@ -127,6 +128,7 @@ interface MessageBubbleProps {
   onToggleThinking: () => void;
   onLongPress: () => void;
   onMenuOpen: () => void;
+  hideProse?: boolean;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -146,6 +148,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onToggleThinking,
   onLongPress,
   onMenuOpen,
+  hideProse,
 }) => {
   const toolsBeforeActiveThinking = Boolean(
     isStreaming &&
@@ -182,8 +185,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         testID={message.isThinking ? undefined : 'message-bubble'}
         style={message.isThinking ? undefined : bubbleStyle}
       >
-
-      <View testID="message-bubble" style={bubbleStyle}>
         {hasAttachments && (
           <MessageAttachments
             attachments={message.attachments!}
@@ -276,7 +277,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
+  const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showSelectText, setShowSelectText] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
@@ -408,12 +411,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         styles={styles}
         colors={colors}
         showActionMenu={showActionMenu}
+        showSelectText={showSelectText}
         isEditing={isEditing}
         isUser={isUser}
         canEdit={!!onEdit}
         canRetry={!!onRetry}
         canGenerateImage={canGenerateImage && !!onGenerateImage}
         canSpeak={canSpeak}
+        showSelectTextAction={interfaceMode === 'chat'}
         displayContent={displayContent}
         alertState={alertState}
         onCloseActionMenu={() => setShowActionMenu(false)}
@@ -423,6 +428,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
+        onSelectText={handleSelectText}
         onSaveEdit={handleSaveEdit}
         onCancelEdit={handleCancelEdit}
         onCloseAlert={() => setAlertState(hideAlert())}

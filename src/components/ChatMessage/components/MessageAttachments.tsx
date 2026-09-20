@@ -82,7 +82,6 @@ interface MessageAttachmentsProps {
   colors: any;
   onImagePress?: (uri: string) => void;
 }
-}
 
 export function MessageAttachments({
   attachments,
