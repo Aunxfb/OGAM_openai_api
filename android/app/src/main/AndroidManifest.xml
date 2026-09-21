@@ -91,5 +91,12 @@
           android:name="androidx.work.impl.foreground.SystemForegroundService"
           android:foregroundServiceType="dataSync"
           tools:node="merge" />
+
+      <!-- On-device llama-server: serves the loaded model on the LAN with an
+           ongoing notification + wakelock (see LocalServerForegroundService). -->
+      <service
+          android:name=".localserver.LocalServerForegroundService"
+          android:foregroundServiceType="dataSync"
+          android:exported="false" />
     </application>
 </manifest>

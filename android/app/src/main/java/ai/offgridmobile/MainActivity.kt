@@ -1,5 +1,6 @@
 package ai.offgridmobile
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
@@ -8,6 +9,8 @@ import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
+import ai.offgridmobile.localserver.LocalServerForegroundService
+import ai.offgridmobile.localserver.LocalServerModule
 
 class MainActivity : ReactActivity() {
 
@@ -39,5 +42,19 @@ class MainActivity : ReactActivity() {
     )
     // Prevent restoring screen fragments for react-native-screens
     super.onCreate(null)
+    checkLocalServerNotificationIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    checkLocalServerNotificationIntent(intent)
+  }
+
+  /** Server notification taps carry this extra — the T7 screen consumes it. */
+  private fun checkLocalServerNotificationIntent(intent: Intent?) {
+    if (intent?.getBooleanExtra(LocalServerForegroundService.EXTRA_OPEN_LOCAL_SERVER, false) == true) {
+      LocalServerModule.pendingOpenRequest = true
+    }
   }
 }
