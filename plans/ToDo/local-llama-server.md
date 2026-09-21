@@ -212,9 +212,19 @@ llama-server, Ollama, and LM Studio.
   + vendored `tools/server/README.md` + `server-context.cpp` shapes).
 - 2026-09-21 (T8 catch): `PARTIAL_WAKE_LOCK` needs the `WAKE_LOCK`
   manifest permission — it was missing, added.
+- 2026-09-21 (FGS hardening, web-researched): the server service is
+  `specialUse`, NOT `dataSync`. dataSync is time-boxed to 6h/24h on
+  Android 15+ for targetSdk 35+ (we target 36) and means device-to-cloud
+  transfer; specialUse is the designated escape hatch with no timeout.
+  Manifest carries `FOREGROUND_SERVICE_SPECIAL_USE` + the subtype property;
+  Play Console declaration (Policy > App content) still required at release
+  time. Restart-after-kill drops the notification rather than lying about a
+  dead socket; PARTIAL_WAKE_LOCK stays per dontkillmyapp guidance. Sources:
+  developer.android.com FGS timeout + service-types docs (via changelog
+  mirror), dontkillmyapp.com.
 - 2026-09-21 (T9 gate record): `tsc --noEmit` clean; eslint 0 errors on
   touched files (2 pre-existing AppNavigator warnings untouched); jest
-  localServer suites 38/38 + JVM `LocalServerRouterTest` 12/12 green;
+  localServer suites 38/38 + JVM `LocalServerRouterTest` 13/13 green;
   `testDebugUnitTest` (filtered) BUILD SUCCESSFUL. Skipped-as-environment:
   `:app:lintDebug` (user-skipped), `depcruise` (needs node 22+, box has
   node 20), `knip` (missing oxc native binding), iOS suites + device gate

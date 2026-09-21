@@ -34,6 +34,11 @@
          the app is backgrounded / the screen is off (WorkManager foreground worker). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- On-device llama-server runs indefinitely while switched on. dataSync
+         is time-boxed to 6h/24h on Android 15+ and means device-to-cloud
+         transfer, so the server uses specialUse instead (Play Console
+         declaration required at release time). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Android 13+ needs this to SHOW the ongoing download notification (requested at runtime). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -101,7 +106,11 @@
            ongoing notification + wakelock (see LocalServerForegroundService). -->
       <service
           android:name=".localserver.LocalServerForegroundService"
-          android:foregroundServiceType="dataSync"
-          android:exported="false" />
+          android:foregroundServiceType="specialUse"
+          android:exported="false">
+          <property
+              android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+              android:value="On-device LLM server: serves the loaded model over the local network while the user keeps it switched on." />
+      </service>
     </application>
 </manifest>
