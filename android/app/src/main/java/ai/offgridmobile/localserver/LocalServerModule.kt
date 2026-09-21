@@ -72,7 +72,10 @@ class LocalServerModule(reactContext: ReactApplicationContext) :
                 server = http
                 lastConfig = config
                 lastError = null
-                LocalServerForegroundService.start(reactApplicationContext)
+                LocalServerForegroundService.start(
+                    reactApplicationContext,
+                    http.baseUrls().joinToString(separator = ", ").ifEmpty { null },
+                )
                 val status = statusMap()
                 sendStatus(status)
                 safe.resolve(status)

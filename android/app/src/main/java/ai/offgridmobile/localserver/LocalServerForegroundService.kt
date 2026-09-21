@@ -28,6 +28,34 @@ class LocalServerForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureChannel()
+        showNotification(null)
+        // CPU stays on so serving survives screen-off; the screen may sleep.
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OffGrid:LocalServer").apply {
+            acquire(12 * 60 * 60 * 1000L)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) {
+            // System restart after the process died: the socket and the JS
+            // bridge are gone, so claiming "running" would lie. Drop the
+            // notification; the user restarts from the Local Server screen.
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        showNotification(intent.getStringExtra(EXTRA_SUMMARY))
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        try { wakeLock?.release() } catch (_: Exception) {}
+        wakeLock = null
+        super.onDestroy()
+    }
+
+    /** (Re)build the ongoing notification; also re-asserts foreground state. */
+    private fun showNotification(summary: String?) {
         val openApp = Intent(this, MainActivity::class.java).apply {
             putExtra(EXTRA_OPEN_LOCAL_SERVER, true)
         }
@@ -37,16 +65,12 @@ class LocalServerForegroundService : Service() {
         )
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Off Grid AI local server running")
-            .setContentText("Serving the loaded model on your network")
+            .setContentText(summary ?: "Serving the loaded model on your network")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pending)
             .setOngoing(true)
+            .setAutoCancel(false)
             .build()
-        // CPU stays on so serving survives screen-off; the screen may sleep.
-        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OffGrid:LocalServer").apply {
-            acquire(12 * 60 * 60 * 1000L)
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -54,14 +78,7 @@ class LocalServerForegroundService : Service() {
         }
     }
 
-    override fun onDestroy() {
-        try { wakeLock?.release() } catch (_: Exception) {}
-        wakeLock = null
-        super.onDestroy()
-    }
-
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    private fun ensureChannel() {        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(
@@ -74,9 +91,12 @@ class LocalServerForegroundService : Service() {
         const val CHANNEL_ID = "offgrid_local_server"
         const val NOTIFICATION_ID = 4201
         const val EXTRA_OPEN_LOCAL_SERVER = "openLocalServer"
+        const val EXTRA_SUMMARY = "summary"
 
-        fun start(context: Context) {
-            val intent = Intent(context, LocalServerForegroundService::class.java)
+        fun start(context: Context, summary: String? = null) {
+            val intent = Intent(context, LocalServerForegroundService::class.java).apply {
+                putExtra(EXTRA_SUMMARY, summary)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
