@@ -121,9 +121,10 @@ llama-server, Ollama, and LM Studio.
   - Verify: `npx jest src/services/localServer/__tests__/` green;
     `npx tsc --noEmit`; `npm run depcruise`.
 
-- [ ] **T4: Android native module (Kotlin).**
-  `android/app/src/main/java/ai/offgridmobile/localserver/`:
-  embedded HTTP(S) server satisfying `contract.ts` exactly; TLS off/BYOC-PEM/
+- [x] **T4: Android native module (Kotlin).** *(done 2026-09-21, incl. T6
+  delegation plumbing below — landed in one commit since the files were new)*
+  `android/app/src/main/java/ai/offgridmobile/localserver/`: embedded
+  HTTP(S) server satisfying `contract.ts` exactly; TLS off/BYOC-PEM/
   persisted-self-signed via AndroidKeyStore; bind loopback/interface/all;
   foreground service + ongoing notification (tap opens Local Server screen)
   + `PARTIAL_WAKE_LOCK` (CPU on, screen may sleep); request routing for the
@@ -134,7 +135,11 @@ llama-server, Ollama, and LM Studio.
     `./gradlew :app:testDebugUnitTest` green; contract method/event names
     diffed against `contract.ts` (no drift).
 
-- [ ] **T5: iOS native module (Swift).**
+- [ ] **T5: iOS native module (Swift).** — DEFERRED by user order 2026-09-21
+  ("skip iOS"). Contract surface it must one day satisfy is frozen in
+  `contract.ts` (start/stop/getStatus/respondToRequest/sendChunk/
+  finishStream/getCertificateFingerprint/regenerateCertificate/
+  consumePendingOpenRequest + 3 events).
   `ios/LocalServerModule.swift` + `.m`: same method names, same events,
   same semantics as T4 (persistence, cleanup, error cascading). Keychain
   identity for self-signed; document foreground-only limit in-code comment
@@ -144,7 +149,8 @@ llama-server, Ollama, and LM Studio.
     `npm run test:ios` green; contract parity checklist against T4 signed
     off in the plan.
 
-- [ ] **T6: v1 route handlers (both natives, same behavior).**
+- [x] **T6: v1 route handlers (Android native + JS dispatcher; iOS deferred).**
+  *(done 2026-09-21 Android-only)*
   `GET /health` (public) + `GET /v1/models` (single fixed entry for the
   loaded model) + `POST /v1/chat/completions` (SSE: `data: {chunk}` …
   `data: [DONE]`; `stream:false` single JSON) + `POST /v1/completions` +
@@ -156,7 +162,8 @@ llama-server, Ollama, and LM Studio.
     manual curl script (health/models/chat-SSE/completions) green on a
     real Android device AND a real iPhone before merge.
 
-- [ ] **T7: Settings UI — `LocalServerScreen` + wiring.**
+- [x] **T7: Settings UI — `LocalServerScreen` + wiring.** *(done 2026-09-21;
+  info card notes iPhone build is out of scope)*
   New `src/screens/LocalServerScreen.tsx` (+ `.styles.ts`, design tokens,
   Feather `server` icon): on/off switch, status card (running URL(s),
   request count, last error), port field, bind selector
@@ -172,13 +179,14 @@ llama-server, Ollama, and LM Studio.
     toggle, assert what the user SEES; fakes only at the native boundary);
     run ONLY that file while iterating. `npx eslint` on touched files.
 
-- [ ] **T8: Permissions + manifests.**
+- [x] **T8: Permissions + manifests (Android done; iOS deferred with T5).**
+  *(done 2026-09-21 Android-only)*
   Android: `FOREGROUND_SERVICE` (+ `POST_NOTIFICATIONS` runtime request path).
   iOS: `NSLocalNetworkUsageDescription` string (brand-voice checked).
   - Depends on: T4, T5
   - Verify: clean install on each platform prompts correctly; `npx tsc --noEmit`.
 
-- [ ] **T9: Gates + hygiene.**
+- [ ] **T9: Gates + hygiene (partial 2026-09-21 — device gate outstanding).**
   Run `npm run lint && npx tsc --noEmit && npm test`, `npm run depcruise`,
   `npm run knip`; fix or record. Commit per-concern slices on a
   `feat/local-llama-server` branch (never `main`); push branch only, no PR.
@@ -186,6 +194,34 @@ llama-server, Ollama, and LM Studio.
   - Verify: all gates green; `git log main..HEAD` shows small per-concern commits.
 
 ## Decisions Log
+
+- 2026-09-21 (Android scope, user-ordered "skip iOS"): T5 + all iOS halves
+  of T6/T7/T8 deferred. Deviation from rules.md platform-parity logged:
+  contract surface is frozen for the future Swift module, but only Kotlin
+  implements it today. Work stayed on the current `diverge/no-shared-dep`
+  branch (the `feat/local-llama-server` branch was never created; T0-T3
+  already lived here) — never `main`, no PR.
+- 2026-09-21 (T6 bridge shape): ONE `LocalServerRequest` event native→JS
+  plus `respondToRequest` (single JSON) / `sendChunk`+`finishStream` (SSE)
+  JS→native, with a 15-min bounded wait and a corruption-safe timeout
+  (half-open streams get a terminator, never a second response head).
+  Fingerprint/regenerate are contract methods so iOS inherits the UI.
+- 2026-09-21 (T6 `/detokenize`): llama.rn exposes `detokenize` but
+  `llmService` did not wrap it — added an additive `detokenize(tokens)`
+  next to `tokenize` (verified against `node_modules/llama.rn/src/index.ts`
+  + vendored `tools/server/README.md` + `server-context.cpp` shapes).
+- 2026-09-21 (T8 catch): `PARTIAL_WAKE_LOCK` needs the `WAKE_LOCK`
+  manifest permission — it was missing, added.
+- 2026-09-21 (T9 gate record): `tsc --noEmit` clean; eslint 0 errors on
+  touched files (2 pre-existing AppNavigator warnings untouched); jest
+  localServer suites 38/38 + JVM `LocalServerRouterTest` 12/12 green;
+  `testDebugUnitTest` (filtered) BUILD SUCCESSFUL. Skipped-as-environment:
+  `:app:lintDebug` (user-skipped), `depcruise` (needs node 22+, box has
+  node 20), `knip` (missing oxc native binding), iOS suites + device gate
+  (no Xcode/device on this box). Pre-existing failures unrelated to this
+  work, verified by stashing: 3 `llm.test.ts` FAIL-SAFE thinking tests.
+  `docs/brand_tone_voice.md` (plan reference) does not exist in the repo —
+  copy kept plain per rules.md inline table instead.
 
 - 2026-09-20: Native modules (Kotlin+Swift), one shared TS contract — no JS
   listening socket exists in RN; JS polyfills rejected (TLS + background
