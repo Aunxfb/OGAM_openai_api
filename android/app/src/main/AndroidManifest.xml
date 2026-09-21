@@ -25,6 +25,11 @@
 <!-- To check and request battery optimization exemption for uninterrupted downloads -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- On-device llama-server holds a PARTIAL_WAKE_LOCK so serving survives
+         screen-off (see LocalServerForegroundService). Normal-level permission,
+         granted at install — no runtime request needed. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Run large model downloads as a foreground service so they keep progressing when
          the app is backgrounded / the screen is off (WorkManager foreground worker). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
