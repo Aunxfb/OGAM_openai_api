@@ -26,7 +26,7 @@ object LocalServerRouter {
     const val RETRY_AFTER_SEC = "5"
 
     /** Paths that never require the Bearer key (mirrors llama-server). */
-    private val PUBLIC_PATHS = setOf("/health")
+    private val PUBLIC_PATHS = setOf("/health", "/")
 
     /** Inference routes served 503 until T6 wires JS delegation. */
     private val INFERENCE_PATHS = setOf(
@@ -74,6 +74,12 @@ object LocalServerRouter {
         if (method == "GET" && path == "/health") {
             return Decision(200, """{"status":"ok"}""")
         }
+        if (method == "GET" && path == "/") {
+            // Landing page, not the full llama-server chat UI (v2): tells a
+            // human with a browser what this server is and where the API
+            // lives. Static so the socket thread answers with no JS round-trip.
+            return Decision(200, rootPageBody(), "text/html")
+        }
         if (path == "/v1/embeddings") {
             // T0 decision: real embeddings are v2; v1 answers 501.
             return Decision(501, """{"error":{"message":"embeddings are not available in v1","type":"not_implemented"}}""")
@@ -108,6 +114,22 @@ object LocalServerRouter {
     // ── v1 JSON body builders (parity with oai.ts — same shapes, same keys) ──
 
     fun healthBody(): String = """{"status":"ok"}"""
+
+    /** Minimal `GET /` landing page (static — no model info, see /v1/models). */
+    fun rootPageBody(): String =
+        "<!doctype html><html><head><meta charset=\"utf-8\">" +
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+            "<title>Off Grid AI local server</title></head><body>" +
+            "<h1>Off Grid AI local server</h1>" +
+            "<p>This phone serves its loaded model over an OpenAI-style API.</p>" +
+            "<ul>" +
+            "<li><a href=\"/health\">/health</a> - server status</li>" +
+            "<li><a href=\"/v1/models\">/v1/models</a> - loaded model</li>" +
+            "<li>POST /v1/chat/completions - chat (streaming supported)</li>" +
+            "<li>POST /v1/completions - text completion</li>" +
+            "<li>POST /tokenize - tokenize text</li>" +
+            "<li>POST /detokenize - convert tokens to text</li>" +
+            "</ul></body></html>"
 
     fun modelsBody(modelId: String): String =
         """{"object":"list","data":[{"id":"${jsonEscape(modelId)}","object":"model","created":0,"owned_by":"offgrid"}]}"""

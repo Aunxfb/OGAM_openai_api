@@ -76,6 +76,16 @@ class LocalServerRouterTest {
     }
 
     @Test
+    fun rootLandingPageIsPublicHtml() {
+        val res = LocalServerRouter.route("GET", "/", emptyMap(), "secret")
+        assertEquals(200, res.status)
+        assertEquals("text/html", res.contentType)
+        assertTrue(res.body.contains("Off Grid AI local server"))
+        assertTrue(res.body.contains("/v1/chat/completions"))
+        assertFalse(LocalServerRouter.needsJsDispatch("GET", "/"))
+    }
+
+    @Test
     fun inferenceRoutesDispatchToJsWhileHealthAndEmbeddingsStayInline() {
         assertTrue(LocalServerRouter.needsJsDispatch("POST", "/v1/chat/completions"))
         assertTrue(LocalServerRouter.needsJsDispatch("POST", "/v1/completions"))

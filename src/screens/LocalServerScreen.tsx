@@ -386,7 +386,8 @@ export const LocalServerScreen: React.FC = () => {
           <Text style={styles.infoText}>
             Serves the model loaded on this phone at an OpenAI-style API, the same shape desktop
             tools use against llama-server. It stays up with the screen off on Android. An iPhone
-            build is not part of this change.
+            build is not part of this change. Opening the server address in a browser shows
+            a status page.
           </Text>
         </View>
       </ScrollView>
