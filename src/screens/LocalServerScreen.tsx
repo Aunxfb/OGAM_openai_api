@@ -17,6 +17,7 @@ import {
   TextInput,
   Platform,
   PermissionsAndroid,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -171,6 +172,14 @@ export const LocalServerScreen: React.FC = () => {
     },
     [fail, setConfig],
   );
+
+  const openSystemSettings = useCallback(() => {
+    try {
+      Linking.openSettings().catch(() => {});
+    } catch {
+      // No-op: settings unavailable on this build.
+    }
+  }, []);
 
   const handleRegenerate = useCallback(() => {
     setAlertState(
@@ -381,6 +390,8 @@ export const LocalServerScreen: React.FC = () => {
           />
         </View>
 
+        <StayRunningCard onOpenSettings={openSystemSettings} />
+
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>About the local server</Text>
           <Text style={styles.infoText}>
@@ -394,5 +405,29 @@ export const LocalServerScreen: React.FC = () => {
 
       <CustomAlert {...alertState} onClose={() => setAlertState(initialAlertState)} />
     </SafeAreaView>
+  );
+};
+
+/** Battery-exemption guidance: OEM killers ignore the foreground service. */
+const StayRunningCard: React.FC<{ onOpenSettings: () => void }> = ({ onOpenSettings }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Stay running</Text>
+      <Text style={styles.stayRunningText}>
+        The server keeps the loaded model in memory while it is on. Some phones still stop
+        background apps to save battery. Turn battery optimization off for this app so the
+        server is not stopped overnight.
+      </Text>
+      <TouchableOpacity
+        testID="local-server-battery-settings"
+        style={styles.fileButton}
+        onPress={onOpenSettings}
+      >
+        <Icon name="battery" size={16} color={theme.colors.textSecondary} />
+        <Text style={styles.fileButtonText}>Open system settings</Text>
+      </TouchableOpacity>
+    </View>
   );
 };

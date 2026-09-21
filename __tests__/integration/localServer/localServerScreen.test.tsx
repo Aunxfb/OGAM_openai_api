@@ -93,4 +93,11 @@ describe('LocalServerScreen', () => {
     const native = NativeModules.LocalServerModule as { start: jest.Mock };
     expect(native.start).not.toHaveBeenCalled();
   });
+
+  it('shows the stay-running guidance with a settings shortcut', () => {
+    const screen = renderScreen();
+
+    expect(screen.getByText('Stay running')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('local-server-battery-settings'));
+  });
 });

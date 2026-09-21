@@ -187,6 +187,12 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       color: colors.error,
       flex: 1,
     },
+    stayRunningText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      marginBottom: 8,
+    },
     infoCard: {
       backgroundColor: colors.surfaceLight,
       borderRadius: 12,
