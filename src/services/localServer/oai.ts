@@ -133,6 +133,92 @@ export function modelsListPayload(modelId: string): object {
   };
 }
 
+/** Parse a JSON request body into a plain object. Throws a typed error the
+ *  route layer turns into a 400 — never throws a SyntaxError across layers. */
+export function parseJsonBody(body: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new Error('request body must be valid JSON');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('request body must be a JSON object');
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/** True when the caller asked for SSE (`"stream": true`); anything else
+ *  (absent, false, non-boolean) answers with a single JSON object. */
+export function isStreamRequested(params: Record<string, unknown>): boolean {
+  return params.stream === true;
+}
+
+/** Non-streaming `POST /v1/chat/completions` response envelope. */
+export function chatCompletionJson(args: {
+  model: string;
+  text: string;
+  id: string;
+  created: number;
+}): object {
+  return {
+    id: args.id,
+    object: 'chat.completion',
+    created: args.created,
+    model: args.model,
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content: args.text },
+        finish_reason: 'stop',
+      },
+    ],
+  };
+}
+
+/** Non-streaming `POST /v1/completions` (legacy text) response envelope. */
+export function textCompletionJson(args: {
+  model: string;
+  text: string;
+  id: string;
+  created: number;
+}): object {
+  return {
+    id: args.id,
+    object: 'text_completion',
+    created: args.created,
+    model: args.model,
+    choices: [{ index: 0, text: args.text, finish_reason: 'stop' }],
+  };
+}
+
+/** `POST /tokenize` response: `{"tokens": [...]}` per llama-server. */
+export function tokenizeJson(tokens: number[]): object {
+  return { tokens };
+}
+
+/** `POST /detokenize` response: `{"content": "..."}` per llama-server. */
+export function detokenizeJson(text: string): object {
+  return { content: text };
+}
+
+/** 401 body for Bearer-gated routes. */
+export function unauthorizedBody(): object {
+  return { error: { message: 'unauthorized', type: 'auth_error' } };
+}
+
+/** 404 body for unknown routes. */
+export function notFoundBody(): object {
+  return { error: { message: 'not found', type: 'not_found' } };
+}
+
+/** 501 body for v1-deferred routes (real embeddings are v2 per T0). */
+export function embeddingsUnavailableBody(): object {
+  return {
+    error: { message: 'embeddings are not available in v1', type: 'not_implemented' },
+  };
+}
+
 /** 503 body served while the model is (un)loading — never silently drops. */
 export function modelLoadingBody(): object {
   return { error: { message: 'model loading', type: 'server_error', code: 'model_loading' } };

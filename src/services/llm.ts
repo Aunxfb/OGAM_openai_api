@@ -453,6 +453,10 @@ class LLMService {
     if (!this.context) throw new Error('No model loaded');
     return (await this.context.tokenize(text)).tokens || [];
   }
+  async detokenize(tokens: number[]) {
+    if (!this.context) throw new Error('No model loaded');
+    return this.context.detokenize(tokens);
+  }
   async getTokenCount(text: string) {
     if (!this.context) throw new Error('No model loaded');
     return (await this.context.tokenize(text)).tokens?.length || 0;

@@ -8,7 +8,7 @@
 import { useAppStore } from '../../../stores/appStore';
 import { resetStores } from '../../../../__tests__/utils/testHelpers';
 import { LocalServerService, type LocalServerBridge } from '../LocalServerService';
-import type { LocalServerNativeStatus } from '../contract';
+import type { LocalServerNativeRequest, LocalServerNativeStatus } from '../contract';
 
 function runningStatus(): LocalServerNativeStatus {
   return {
@@ -34,6 +34,15 @@ function makeBridge(overrides?: Partial<LocalServerBridge>): LocalServerBridge &
     subscribeEvents: () => {
       calls.push('subscribe');
       return () => {};
+    },
+    respond: async (requestId, response) => {
+      calls.push(`respond:${requestId}:${response.status}`);
+    },
+    sendChunk: async requestId => {
+      calls.push(`chunk:${requestId}`);
+    },
+    finishStream: async requestId => {
+      calls.push(`finish:${requestId}`);
     },
     ...overrides,
   };
@@ -132,5 +141,185 @@ describe('LocalServerService', () => {
     expect(svc.isAuthorized('/health', null)).toBe(true);
     expect(svc.isAuthorized('/v1/models', null)).toBe(false);
     expect(svc.isAuthorized('/v1/models', 'Bearer secret')).toBe(true);
+  });
+});
+
+describe('LocalServerService.handleNativeRequest', () => {
+  interface Captured {
+    requestId: string;
+    status: number;
+    body: string;
+  }
+
+  function req(partial: Partial<LocalServerNativeRequest>): LocalServerNativeRequest {
+    return {
+      requestId: 'req-1',
+      method: 'GET',
+      path: '/health',
+      headers: {},
+      body: '',
+      ...partial,
+    };
+  }
+
+  async function runningService(opts?: {
+    generate?: (messages: unknown[], onToken?: (t: string) => void) => Promise<string>;
+    tokenize?: (text: string) => Promise<number[]>;
+    detokenize?: (tokens: number[]) => Promise<string>;
+  }): Promise<{ svc: LocalServerService; responses: Captured[]; chunks: string[]; finishes: string[] }> {
+    const responses: Captured[] = [];
+    const chunks: string[] = [];
+    const finishes: string[] = [];
+    const bridge: LocalServerBridge = {
+      startNative: async () => runningStatus(),
+      stopNative: async () => {},
+      subscribeEvents: () => () => {},
+      respond: async (requestId, response) => {
+        responses.push({ requestId, status: response.status, body: response.body });
+      },
+      sendChunk: async (requestId, sseData) => {
+        chunks.push(`${requestId}:${sseData}`);
+      },
+      finishStream: async requestId => {
+        finishes.push(requestId);
+      },
+    };
+    const svc = new LocalServerService(
+      bridge,
+      (opts?.generate as never) ?? (async () => 'hello'),
+      {
+        tokenize: opts?.tokenize ?? (async () => [1, 2]),
+        detokenize: opts?.detokenize ?? (async () => 'hi'),
+      },
+    );
+    await svc.start();
+    return { svc, responses, chunks, finishes };
+  }
+
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('answers 503 when the service is not running', async () => {
+    const { svc, responses } = await runningService();
+    await svc.stop();
+    await svc.handleNativeRequest(req({}));
+
+    expect(responses).toHaveLength(1);
+    expect(responses[0].status).toBe(503);
+  });
+
+  it('answers health publicly with status ok', async () => {
+    const { svc, responses } = await runningService();
+    await svc.handleNativeRequest(req({}));
+
+    expect(responses[0].status).toBe(200);
+    expect(JSON.parse(responses[0].body)).toEqual({ status: 'ok' });
+  });
+
+  it('rejects gated routes without the Bearer key', async () => {
+    const { svc, responses } = await runningService();
+    useAppStore.getState().setLocalServerConfig({ apiKey: 'secret' });
+    await svc.handleNativeRequest(req({ method: 'GET', path: '/v1/models' }));
+
+    expect(responses[0].status).toBe(401);
+  });
+
+  it('serves the loaded model id on /v1/models and 503 in transition', async () => {
+    const { svc, responses } = await runningService();
+    useAppStore.getState().setLoadedTextModelId(null);
+    await svc.handleNativeRequest(req({ method: 'GET', path: '/v1/models' }));
+    expect(responses[0].status).toBe(503);
+
+    useAppStore.getState().setLoadedTextModelId('model-abc');
+    await svc.handleNativeRequest(req({ method: 'GET', path: '/v1/models', requestId: 'req-2' }));
+    expect(responses[1].status).toBe(200);
+    const body = JSON.parse(responses[1].body);
+    expect(body.data[0].id).toBe('model-abc');
+  });
+
+  it('answers a non-streaming chat completion with the envelope', async () => {
+    const { svc, responses } = await runningService();
+    useAppStore.getState().setLoadedTextModelId('model-abc');
+    await svc.handleNativeRequest(
+      req({
+        method: 'POST',
+        path: '/v1/chat/completions',
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+      }),
+    );
+
+    expect(responses[0].status).toBe(200);
+    const body = JSON.parse(responses[0].body);
+    expect(body.object).toBe('chat.completion');
+    expect(body.choices[0].message.content).toBe('hello');
+  });
+
+  it('streams chat deltas as SSE chunks then finishes', async () => {
+    const { svc, responses, chunks, finishes } = await runningService({
+      generate: async (_messages, onToken) => {
+        onToken?.('a');
+        onToken?.('b');
+        return 'ab';
+      },
+    });
+    useAppStore.getState().setLoadedTextModelId('model-abc');
+    await svc.handleNativeRequest(
+      req({
+        method: 'POST',
+        path: '/v1/chat/completions',
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], stream: true }),
+      }),
+    );
+
+    expect(responses).toHaveLength(0);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toContain('chat.completion.chunk');
+    expect(finishes).toEqual(['req-1']);
+  });
+
+  it('answers 400 for invalid JSON and malformed messages', async () => {
+    const { svc, responses } = await runningService();
+    useAppStore.getState().setLoadedTextModelId('model-abc');
+    await svc.handleNativeRequest(
+      req({ method: 'POST', path: '/v1/chat/completions', body: 'not-json' }),
+    );
+    expect(responses[0].status).toBe(400);
+
+    await svc.handleNativeRequest(
+      req({
+        method: 'POST',
+        path: '/v1/chat/completions',
+        body: JSON.stringify({ messages: [] }),
+        requestId: 'req-2',
+      }),
+    );
+    expect(responses[1].status).toBe(400);
+  });
+
+  it('serves tokenize and detokenize from the loaded context', async () => {
+    const { svc, responses } = await runningService();
+    useAppStore.getState().setLoadedTextModelId('model-abc');
+    await svc.handleNativeRequest(
+      req({ method: 'POST', path: '/tokenize', body: JSON.stringify({ content: 'hi' }) }),
+    );
+    expect(responses[0].status).toBe(200);
+    expect(JSON.parse(responses[0].body)).toEqual({ tokens: [1, 2] });
+
+    await svc.handleNativeRequest(
+      req({ method: 'POST', path: '/detokenize', body: JSON.stringify({ tokens: [1, 2] }), requestId: 'req-2' }),
+    );
+    expect(responses[1].status).toBe(200);
+    expect(JSON.parse(responses[1].body)).toEqual({ content: 'hi' });
+  });
+
+  it('answers 501 for embeddings and 404 for unknown routes', async () => {
+    const { svc, responses } = await runningService();
+    useAppStore.getState().setLoadedTextModelId('model-abc');
+    await svc.handleNativeRequest(req({ method: 'POST', path: '/v1/embeddings' }));
+    expect(responses[0].status).toBe(501);
+
+    await svc.handleNativeRequest(req({ method: 'GET', path: '/props', requestId: 'req-2' }));
+    expect(responses[1].status).toBe(404);
   });
 });

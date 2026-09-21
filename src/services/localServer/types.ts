@@ -62,3 +62,18 @@ export function isValidLocalServerPort(port: number): boolean {
     port <= MAX_LOCAL_SERVER_PORT
   );
 }
+
+/** One final JSON answer for a delegated native request. */
+export interface LocalServerJsonAnswer {
+  status: number;
+  body: object;
+  extraHeaders?: Record<string, string>;
+}
+
+/** Shared inputs for the completion paths (streaming + single JSON). */
+export interface LocalServerCompletionJob {
+  requestId: string;
+  path: string;
+  modelId: string;
+  params: Record<string, unknown>;
+}

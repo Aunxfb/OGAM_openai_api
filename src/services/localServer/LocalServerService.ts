@@ -15,6 +15,7 @@
  */
 import { useAppStore } from '../../stores/appStore';
 import { generateStandalone } from '../engines';
+import { llmService } from '../llm';
 import type { Message } from '../../types';
 import logger from '../../utils/logger';
 import {
@@ -22,15 +23,37 @@ import {
   startLocalServerNative,
   stopLocalServerNative,
   subscribeLocalServerEvents,
+  respondToLocalServerRequest,
+  sendLocalServerChunk,
+  finishLocalServerStream,
+  type LocalServerNativeRequest,
   type LocalServerNativeStatus,
 } from './contract';
-import type { LocalServerConfig, LocalServerStatus } from './types';
+import type {
+  LocalServerCompletionJob,
+  LocalServerConfig,
+  LocalServerJsonAnswer,
+  LocalServerStatus,
+} from './types';
+import type { LocalServerFinalResponse } from './contract';
 import {
   admitOrReject,
   isAuthorizedRequest,
   modelLoadingBody,
   normalizeChatMessages,
   splitSamplingParams,
+  parseJsonBody,
+  isStreamRequested,
+  formatSSEChunk,
+  chatChunkEnvelope,
+  chatCompletionJson,
+  textCompletionJson,
+  tokenizeJson,
+  detokenizeJson,
+  unauthorizedBody,
+  notFoundBody,
+  embeddingsUnavailableBody,
+  modelsListPayload,
   type ChatMessage,
 } from './oai';
 
@@ -42,13 +65,20 @@ export interface LocalServerBridge {
   subscribeEvents: (handlers: {
     onStatus?: (status: LocalServerNativeStatus) => void;
     onError?: (message: string) => void;
+    onRequest?: (request: LocalServerNativeRequest) => void;
   }) => () => void;
+  respond: (requestId: string, response: LocalServerFinalResponse) => Promise<void>;
+  sendChunk: (requestId: string, sseData: string) => Promise<void>;
+  finishStream: (requestId: string) => Promise<void>;
 }
 
 const defaultBridge: LocalServerBridge = {
   startNative: startLocalServerNative,
   stopNative: stopLocalServerNative,
   subscribeEvents: subscribeLocalServerEvents,
+  respond: respondToLocalServerRequest,
+  sendChunk: sendLocalServerChunk,
+  finishStream: finishLocalServerStream,
 };
 
 export type GenerateFn = (
@@ -70,14 +100,30 @@ const defaultGenerate: GenerateFn = (messages, onToken) => {
   return generateStandalone(engineMessages, onToken);
 };
 
+export type TokenizeFn = (text: string) => Promise<number[]>;
+export type DetokenizeFn = (tokens: number[]) => Promise<string>;
+
+/** Tokenizer seam: the loaded text context, injectable for tests. */
+export interface LocalServerTokenizer {
+  tokenize: TokenizeFn;
+  detokenize: DetokenizeFn;
+}
+
+const defaultTokenizer: LocalServerTokenizer = {
+  tokenize: text => llmService.tokenize(text),
+  detokenize: tokens => llmService.detokenize(tokens),
+};
+
 export class LocalServerService {
   private state: LocalServerState = 'stopped';
   private activeRequests = 0;
   private unsubscribe: (() => void) | null = null;
+  private completionSeq = 0;
 
   constructor(
     private readonly bridge: LocalServerBridge = defaultBridge,
     private readonly generate: GenerateFn = defaultGenerate,
+    private readonly tokenizer: LocalServerTokenizer = defaultTokenizer,
   ) {}
 
   getState(): LocalServerState {
@@ -118,6 +164,11 @@ export class LocalServerService {
       this.unsubscribe = this.bridge.subscribeEvents({
         onStatus: s => this.mirrorStatus(s),
         onError: m => this.fail(m),
+        onRequest: r => {
+          this.handleNativeRequest(r).catch(err =>
+            logger.warn(`[LOCAL-SERVER] request ${r.requestId} failed: ${String(err)}`),
+          );
+        },
       });
       this.mirrorStatus(status);
       useAppStore.getState().setLocalServerConfig({ enabled: true });
@@ -184,6 +235,244 @@ export class LocalServerService {
     } finally {
       this.activeRequests -= 1;
     }
+  }
+
+  /**
+   * Answer one native-admitted HTTP request. Always settles exactly once —
+   * the socket thread blocks until this answers, so every path (including
+   * unexpected throws) ends in a final response or a closed stream.
+   */
+  async handleNativeRequest(req: LocalServerNativeRequest): Promise<void> {
+    try {
+      const gated = this.gateRequest(req);
+      if (gated) {
+        await this.sendJson(req.requestId, gated);
+        return;
+      }
+      const { method, path } = req;
+      if (method === 'GET' && path === '/health') {
+        await this.sendJson(req.requestId, { status: 200, body: { status: 'ok' } });
+        return;
+      }
+      if (method === 'GET' && path === '/v1/models') {
+        await this.sendJson(req.requestId, this.modelsAnswer());
+        return;
+      }
+      if (path === '/v1/embeddings') {
+        await this.sendJson(req.requestId, { status: 501, body: embeddingsUnavailableBody() });
+        return;
+      }
+      if (method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/completions')) {
+        await this.completionAnswer(req);
+        return;
+      }
+      if (method === 'POST' && (path === '/tokenize' || path === '/detokenize')) {
+        await this.codecAnswer(req);
+        return;
+      }
+      await this.sendJson(req.requestId, { status: 404, body: notFoundBody() });
+    } catch (err) {
+      logger.warn(`[LOCAL-SERVER] request ${req.requestId} error: ${String(err)}`);
+      await this.sendJson(req.requestId, { status: 500, body: { error: { message: 'internal error' } } });
+    }
+  }
+
+  /** Fail-closed gate: 503 when not running, 401 without the key. Null = pass. */
+  private gateRequest(req: LocalServerNativeRequest): LocalServerJsonAnswer | null {
+    if (this.state !== 'running') {
+      return { status: 503, body: modelLoadingBody(), extraHeaders: { 'Retry-After': '5' } };
+    }
+    if (!this.isAuthorized(req.path, req.headers.authorization ?? null)) {
+      return { status: 401, body: unauthorizedBody() };
+    }
+    return null;
+  }
+
+  private sendJson(requestId: string, answer: LocalServerJsonAnswer): Promise<void> {
+    return this.bridge.respond(requestId, {
+      status: answer.status,
+      body: JSON.stringify(answer.body),
+      extraHeaders: answer.extraHeaders,
+    });
+  }
+
+  /** Admit one inference slot, else the 503 answer. Null = admitted. */
+  private admitSlot(): LocalServerJsonAnswer | null {
+    const admission = admitOrReject(this.activeRequests, useAppStore.getState().localServer.queueDepth);
+    if (admission.admitted) return null;
+    return {
+      status: 503,
+      body: modelLoadingBody(),
+      extraHeaders: { 'Retry-After': String(admission.retryAfterSec) },
+    };
+  }
+
+  private loadingAnswer(): LocalServerJsonAnswer {
+    return { status: 503, body: modelLoadingBody(), extraHeaders: { 'Retry-After': '5' } };
+  }
+
+  private badBodyAnswer(err: unknown): LocalServerJsonAnswer {
+    return { status: 400, body: { error: { message: err instanceof Error ? err.message : String(err) } } };
+  }
+
+  private modelsAnswer(): LocalServerJsonAnswer {
+    const model = this.getModelState();
+    if (!model.ready) return this.loadingAnswer();
+    return { status: 200, body: modelsListPayload(model.modelId) };
+  }
+
+  private async completionAnswer(req: LocalServerNativeRequest): Promise<void> {
+    const full = this.admitSlot();
+    if (full) {
+      await this.sendJson(req.requestId, full);
+      return;
+    }
+    const model = this.getModelState();
+    if (!model.ready) {
+      await this.sendJson(req.requestId, this.loadingAnswer());
+      return;
+    }
+    let params: Record<string, unknown>;
+    try {
+      params = parseJsonBody(req.body);
+    } catch (err) {
+      await this.sendJson(req.requestId, this.badBodyAnswer(err));
+      return;
+    }
+    const job: LocalServerCompletionJob = {
+      requestId: req.requestId,
+      path: req.path,
+      modelId: model.modelId,
+      params,
+    };
+    if (isStreamRequested(params)) {
+      await this.streamCompletion(job);
+      return;
+    }
+    await this.singleCompletion(job);
+  }
+
+  private async singleCompletion(job: LocalServerCompletionJob): Promise<void> {
+    const res = await this.completeChat(job.params.messages, job.params, undefined);
+    if (res.status === 200) {
+      const envelope =
+        job.path === '/v1/chat/completions'
+          ? chatCompletionJson({ model: res.model, text: res.text, ...this.nextCompletionIds() })
+          : textCompletionJson({ model: res.model, text: res.text, ...this.nextCompletionIds() });
+      await this.sendJson(job.requestId, { status: 200, body: envelope });
+    } else if (res.status === 503) {
+      await this.sendJson(job.requestId, {
+        status: 503,
+        body: res.body,
+        extraHeaders: { 'Retry-After': res.retryAfterSec ? String(res.retryAfterSec) : '5' },
+      });
+    } else {
+      await this.sendJson(job.requestId, { status: 400, body: res.body });
+    }
+  }
+
+  private async codecAnswer(req: LocalServerNativeRequest): Promise<void> {
+    const full = this.admitSlot();
+    if (full) {
+      await this.sendJson(req.requestId, full);
+      return;
+    }
+    if (!this.getModelState().ready) {
+      await this.sendJson(req.requestId, this.loadingAnswer());
+      return;
+    }
+    let params: Record<string, unknown>;
+    try {
+      params = parseJsonBody(req.body);
+    } catch (err) {
+      await this.sendJson(req.requestId, this.badBodyAnswer(err));
+      return;
+    }
+    if (req.path === '/tokenize') {
+      if (typeof params.content !== 'string') {
+        await this.sendJson(req.requestId, {
+          status: 400,
+          body: { error: { message: 'tokenize requires a string "content" field' } },
+        });
+        return;
+      }
+      this.activeRequests += 1;
+      try {
+        const tokens = await this.tokenizer.tokenize(params.content);
+        await this.sendJson(req.requestId, { status: 200, body: tokenizeJson(tokens) });
+      } finally {
+        this.activeRequests -= 1;
+      }
+      return;
+    }
+    if (!Array.isArray(params.tokens) || !params.tokens.every(t => Number.isInteger(t))) {
+      await this.sendJson(req.requestId, {
+        status: 400,
+        body: { error: { message: 'detokenize requires an integer array "tokens" field' } },
+      });
+      return;
+    }
+    this.activeRequests += 1;
+    try {
+      const text = await this.tokenizer.detokenize(params.tokens as number[]);
+      await this.sendJson(req.requestId, { status: 200, body: detokenizeJson(text) });
+    } finally {
+      this.activeRequests -= 1;
+    }
+  }
+
+  /**
+   * SSE completion: one `chat.completion.chunk` per generated token, then the
+   * stream closes (native writes `data: [DONE]`). A generation failure still
+   * closes the stream — never hangs the socket.
+   */
+  private async streamCompletion(job: LocalServerCompletionJob): Promise<void> {
+    const { requestId, path, modelId, params } = job;
+    let parsed: ChatMessage[];
+    try {
+      parsed = path === '/v1/chat/completions'
+        ? normalizeChatMessages(params.messages)
+        : [{ role: 'user', content: this.extractPrompt(params) }];
+    } catch (err) {
+      await this.sendJson(requestId, this.badBodyAnswer(err));
+      return;
+    }
+    const { ignored } = splitSamplingParams(params);
+    if (ignored.length > 0) {
+      logger.log(`[LOCAL-SERVER] ignoring exotic sampling params: ${ignored.join(',')}`);
+    }
+    const { id, created } = this.nextCompletionIds();
+    this.activeRequests += 1;
+    try {
+      await this.generate(parsed, async token => {
+        const chunk =
+          path === '/v1/chat/completions'
+            ? chatChunkEnvelope({ model: modelId, delta: token, id, created })
+            : { id, object: 'text_completion', created, model: modelId, choices: [{ index: 0, text: token }] };
+        await this.bridge.sendChunk(requestId, formatSSEChunk(chunk));
+      });
+    } catch (err) {
+      logger.warn(`[LOCAL-SERVER] stream ${requestId} error: ${String(err)}`);
+    } finally {
+      this.activeRequests -= 1;
+      await this.bridge.finishStream(requestId);
+    }
+  }
+
+  /** `/v1/completions` takes a plain `prompt` string, not chat messages. */
+  private extractPrompt(params: Record<string, unknown>): string {
+    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
+      throw new Error('prompt must be a non-empty string');
+    }
+    return params.prompt;
+  }
+
+  private nextCompletionIds(): { id: string; created: number } {
+    this.completionSeq += 1;
+    return {
+      id: `chatcmpl-local-${Date.now()}-${this.completionSeq}`,
+      created: Math.floor(Date.now() / 1000),
+    };
   }
 
   private mirrorStatus(s: LocalServerNativeStatus): void {

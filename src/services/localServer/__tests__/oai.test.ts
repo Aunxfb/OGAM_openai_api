@@ -5,12 +5,21 @@
 import {
   admitOrReject,
   chatChunkEnvelope,
+  chatCompletionJson,
+  detokenizeJson,
+  embeddingsUnavailableBody,
   formatSSEChunk,
   isAuthorizedRequest,
+  isStreamRequested,
   modelLoadingBody,
   modelsListPayload,
   normalizeChatMessages,
+  notFoundBody,
+  parseJsonBody,
   splitSamplingParams,
+  textCompletionJson,
+  tokenizeJson,
+  unauthorizedBody,
   SSE_DONE,
 } from '../oai';
 
@@ -88,6 +97,41 @@ describe('localServer oai helpers', () => {
       expect(list.data).toHaveLength(1);
       expect(list.data[0].id).toBe('model-abc');
       expect(JSON.stringify(modelLoadingBody())).toContain('model loading');
+    });
+  });
+
+  describe('v1 response envelopes', () => {
+    it('builds non-streaming chat and text completions', () => {
+      const chat = chatCompletionJson({ model: 'm', text: 'hi', id: 'id-1', created: 1 }) as {
+        choices: { message: { content: string } }[];
+      };
+      expect(chat.choices[0].message.content).toBe('hi');
+      const text = textCompletionJson({ model: 'm', text: 'hi', id: 'id-1', created: 1 }) as {
+        object: string;
+        choices: { text: string }[];
+      };
+      expect(text.object).toBe('text_completion');
+      expect(text.choices[0].text).toBe('hi');
+    });
+
+    it('matches the llama-server tokenize and detokenize shapes', () => {
+      expect(tokenizeJson([1, 2])).toEqual({ tokens: [1, 2] });
+      expect(detokenizeJson('hi')).toEqual({ content: 'hi' });
+    });
+
+    it('parses JSON bodies and detects stream requests', () => {
+      expect(parseJsonBody('{"stream":true}')).toEqual({ stream: true });
+      expect(() => parseJsonBody('nope')).toThrow();
+      expect(() => parseJsonBody('[1]')).toThrow();
+      expect(isStreamRequested({ stream: true })).toBe(true);
+      expect(isStreamRequested({})).toBe(false);
+      expect(isStreamRequested({ stream: false })).toBe(false);
+    });
+
+    it('shapes the 401, 404, and 501 bodies', () => {
+      expect(JSON.stringify(unauthorizedBody())).toContain('unauthorized');
+      expect(JSON.stringify(notFoundBody())).toContain('not found');
+      expect(JSON.stringify(embeddingsUnavailableBody())).toContain('not available in v1');
     });
   });
 });
