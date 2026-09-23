@@ -13,6 +13,7 @@ import {
   ShowGenerationDetailsToggle,
 } from '../../components/settings/textGenAdvancedSections';
 import { SpeculativeDecodingToggle } from '../../components/settings/SpeculativeDecodingToggle';
+import { UnsafeContextToggle } from '../../components/settings/UnsafeContextToggle';
 import { useTextGenerationSettings } from '../../hooks/useTextGenerationSettings';
 import { useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
@@ -59,6 +60,7 @@ export const TextGenerationSection: React.FC = () => {
             <SliderSetting testID="max-tool-calls" {...toolCalls} />
             <LiteRTBackendSelector />
             <ModelLoadingModeSelector />
+            <UnsafeContextToggle />
           </>
         ) : (
           <>

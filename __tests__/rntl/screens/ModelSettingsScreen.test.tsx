@@ -925,6 +925,7 @@ describe('ModelSettingsScreen', () => {
           liteRTTemperature: undefined as any,
           liteRTTopP: undefined as any,
           liteRTMaxTokens: undefined as any,
+          liteRTUnsafeContext: undefined as any,
           hidePromotions: undefined as any,
           debugLogging: undefined as any,
         },

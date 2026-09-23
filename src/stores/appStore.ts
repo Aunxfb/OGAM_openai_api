@@ -88,6 +88,10 @@ type AppSettings = {
   liteRTTemperature: number;
   liteRTTopP: number;
   liteRTMaxTokens: number;
+  /** Skip the native RAM clamp on the LiteRT context budget and grant the raw
+   *  request. The device may SIGABRT or segfault mid-inference — explicit user
+   *  override, off by default. */
+  liteRTUnsafeContext: boolean;
   /** Auto-discover remote LLMs: the background LAN scan that finds + auto-adds Ollama / LM Studio /
    *  gateway servers. Fresh installs are OFF (never scan the network unprompted); a one-time
    *  migration turns it ON for users who already had a gateway. `undefined` = never set (reads OFF).
@@ -252,6 +256,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liteRTTemperature: 0.7,
   liteRTTopP: 0.9,
   liteRTMaxTokens: 4096,
+  liteRTUnsafeContext: false,
   hidePromotions: false,
   debugLogging: false,
 };

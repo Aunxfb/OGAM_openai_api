@@ -22,4 +22,15 @@ describe('liteRTService modelMaxContext', () => {
     await liteRTService.unloadModel();
     expect(useAppStore.getState().modelMaxContext).toBeNull();
   });
+
+  it('passes the RAM-clamp override through to native untouched', async () => {
+    const boundary = installNativeBoundary();
+    const { liteRTService } = require('../../../src/services/litert');
+
+    await liteRTService.loadModel('/m', 'gpu', { maxNumTokens: 8192, skipRamClamp: true });
+
+    expect(boundary.litert.module.loadModel).toHaveBeenCalledWith(
+      '/m', 'gpu', false, false, 8192, true,
+    );
+  });
 });

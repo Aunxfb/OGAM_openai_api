@@ -19,7 +19,7 @@ describe('nativeBoundary harness — injection mechanism', () => {
 
     await liteRTService.loadModel('/models/gemma.litertlm', 'gpu', { maxNumTokens: 4096 });
     expect(boundary.litert.module.loadModel).toHaveBeenCalledWith(
-      '/models/gemma.litertlm', 'gpu', false, false, 4096,
+      '/models/gemma.litertlm', 'gpu', false, false, 4096, false,
     );
   });
 

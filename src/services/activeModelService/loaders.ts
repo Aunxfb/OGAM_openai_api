@@ -119,7 +119,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
 
     try {
       await Promise.race([
-        liteRTService.loadModel(ctx.model.filePath, preferredBackend, { supportsVision: liteRTModel.liteRTVision ?? false, supportsAudio: liteRTModel.liteRTAudio ?? false, maxNumTokens: maxTokens }),
+        liteRTService.loadModel(ctx.model.filePath, preferredBackend, { supportsVision: liteRTModel.liteRTVision ?? false, supportsAudio: liteRTModel.liteRTAudio ?? false, maxNumTokens: maxTokens, skipRamClamp: ctx.store.settings.liteRTUnsafeContext === true }),
         timeoutPromise,
       ]);
     } finally {
@@ -152,6 +152,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setLoadedSettings({
       liteRTBackend: ctx.store.settings.liteRTBackend,
       liteRTMaxTokens: ctx.store.settings.liteRTMaxTokens,
+      liteRTUnsafeContext: ctx.store.settings.liteRTUnsafeContext,
       // Fields not used by LiteRT — set to current values so llama checks don't misfire
       contextLength: ctx.store.settings.contextLength,
       enableGpu: ctx.store.settings.enableGpu,

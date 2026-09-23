@@ -114,9 +114,9 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     // -------------------------------------------------------------------------
 
     @ReactMethod
-    fun loadModel(modelPath: String, backendStr: String, visionEnabled: Boolean, audioEnabled: Boolean, maxNumTokens: Int, promise: Promise) {
+    fun loadModel(modelPath: String, backendStr: String, visionEnabled: Boolean, audioEnabled: Boolean, maxNumTokens: Int, skipRamClamp: Boolean, promise: Promise) {
         val safe = SafePromise(promise, TAG)
-        Log.i(TAG, "loadModel — path=$modelPath backend=$backendStr vision=$visionEnabled audio=$audioEnabled maxNumTokens=$maxNumTokens")
+        Log.i(TAG, "loadModel — path=$modelPath backend=$backendStr vision=$visionEnabled audio=$audioEnabled maxNumTokens=$maxNumTokens skipRamClamp=$skipRamClamp")
 
         scope.launch {
             try {
@@ -124,7 +124,14 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 // grows with the budget, and an over-budget request aborts engine creation
                 // (SIGABRT in nativeCreateEngine) or segfaults during inference. Degrading
                 // to a smaller context keeps the app working instead of crashing.
-                configuredMaxTokens = resolveSafeMaxTokens(modelPath, maxNumTokens)
+                // skipRamClamp is an explicit user override (settings toggle): grant the
+                // raw request and accept the crash risk.
+                configuredMaxTokens = if (skipRamClamp) {
+                    Log.w(TAG, "loadModel — RAM clamp SKIPPED by user override, granting $maxNumTokens tokens")
+                    maxNumTokens
+                } else {
+                    resolveSafeMaxTokens(modelPath, maxNumTokens)
+                }
                 // Unload any existing engine first
                 cleanupEngine()
 
