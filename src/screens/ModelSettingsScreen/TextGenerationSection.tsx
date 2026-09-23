@@ -72,6 +72,7 @@ export const TextGenerationSection: React.FC = () => {
             <BackendSelector />
             <FlashAttentionToggle />
             <SpeculativeDecodingToggle />
+            <UnsafeContextToggle />
             <KvCacheTypeToggle />
             <ModelLoadingModeSelector />
           </>

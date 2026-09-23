@@ -119,7 +119,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
 
     try {
       await Promise.race([
-        liteRTService.loadModel(ctx.model.filePath, preferredBackend, { supportsVision: liteRTModel.liteRTVision ?? false, supportsAudio: liteRTModel.liteRTAudio ?? false, maxNumTokens: maxTokens, skipRamClamp: ctx.store.settings.liteRTUnsafeContext === true }),
+        liteRTService.loadModel(ctx.model.filePath, preferredBackend, { supportsVision: liteRTModel.liteRTVision ?? false, supportsAudio: liteRTModel.liteRTAudio ?? false, maxNumTokens: maxTokens, skipRamClamp: ctx.store.settings.unsafeContext === true }),
         timeoutPromise,
       ]);
     } finally {
@@ -152,7 +152,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setLoadedSettings({
       liteRTBackend: ctx.store.settings.liteRTBackend,
       liteRTMaxTokens: ctx.store.settings.liteRTMaxTokens,
-      liteRTUnsafeContext: ctx.store.settings.liteRTUnsafeContext,
+      unsafeContext: ctx.store.settings.unsafeContext,
       // Fields not used by LiteRT — set to current values so llama checks don't misfire
       contextLength: ctx.store.settings.contextLength,
       enableGpu: ctx.store.settings.enableGpu,
@@ -204,7 +204,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
     try {
       await Promise.race([
-        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override }),
+        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override || ctx.store.settings.unsafeContext === true }),
         timeoutPromise,
       ]);
     } finally {
@@ -229,6 +229,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
       nThreads: settings.nThreads,
       nBatch: settings.nBatch,
       contextLength: settings.contextLength,
+      unsafeContext: settings.unsafeContext,
       flashAttn: settings.flashAttn,
       // Store the effective cache type (f16 may be forced for OpenCL) so the
       // banner doesn't show a false mismatch when the user setting differs.

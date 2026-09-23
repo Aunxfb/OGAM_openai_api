@@ -19,7 +19,7 @@ export function computePendingSettings(
       (loadedSettings.liteRTMaxTokens as number | undefined) ?? 4096;
     return (
       changed(settings.liteRTBackend, loadedSettings.liteRTBackend) ||
-      changed(settings.liteRTUnsafeContext, loadedSettings.liteRTUnsafeContext) ||
+      changed(settings.unsafeContext, loadedSettings.unsafeContext) ||
       ((loadedSettings.liteRTMaxTokens !== undefined ||
         loadedSettings.liteRTBackend !== undefined) &&
         liveTokens !== loadedTokens)
@@ -43,6 +43,7 @@ export function computePendingSettings(
     changed(settings.gpuLayers, loadedSettings.gpuLayers) ||
     changed(settings.flashAttn, loadedSettings.flashAttn) ||
     changed(settings.speculativeDecoding, loadedSettings.speculativeDecoding) ||
+    changed(settings.unsafeContext, loadedSettings.unsafeContext) ||
     (loadedSettings.cacheType !== undefined &&
       effectiveLiveCache !== effectiveLoadedCache)
   );

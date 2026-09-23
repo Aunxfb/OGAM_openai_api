@@ -95,7 +95,11 @@ class LLMService {
       return { ...raw, available: availableMB * 1024 * 1024 };
     };
     let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache });
-    if (!memCheck.safe) {
+    if (!memCheck.safe && override) {
+      // Explicit user override (Unsafe Context / Load Anyway): grant the raw
+      // request instead of stepping down. May crash the native allocator.
+      logger.warn(`[LLM] OVERRIDE — skipping context step-down, granting requested ctx=${params.ctxLen} (estimated ~${memCheck.estimatedMB.toFixed(0)}MB vs ~${memCheck.availableMB.toFixed(0)}MB available)`);
+    } else if (!memCheck.safe) {
       // Don't just warn and load into a near-certain native allocator crash (the iOS
       // metal_buffer_type_alloc_buffer / Android litert OOM clusters). Reduce context
       // to the largest size that fits; only block when the weights alone can't fit.
@@ -149,7 +153,7 @@ class LLMService {
       this.currentSettings = { nThreads, nBatch, contextLength: ctxLen };
       logger.log(`[LLM] Loading model: ctx=${ctxLen}, threads=${nThreads}, batch=${nBatch}, fileSize=${(fileSize / (1024 * 1024)).toFixed(0)}MB, availRAM=${memCheck.availableMB.toFixed(0)}MB`);
       try {
-        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize });
+        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize, override: opts?.override });
         // attemptedGpuLayers (post device-cap/backend resolution) is what the init actually offered the
         // GPU — the truthful layer count for the meta; nGpuLayers is the raw settings request.
         await this.applyLoadedContext({ context, actualLength, gpuAttemptFailed, nGpuLayers: attemptedGpuLayers, requestedGpuLayers: nGpuLayers, modelPath, mmProjPath });
@@ -163,7 +167,7 @@ class LLMService {
       mutex.release();
     }
   }
-  private async initWithAutoContext(params: { baseParams: object; ctxLen: number; nGpuLayers: number; fileSize: number }): Promise<{ context: LlamaContext; gpuAttemptFailed: boolean; actualLength: number; attemptedGpuLayers: number }> {
+  private async initWithAutoContext(params: { baseParams: object; ctxLen: number; nGpuLayers: number; fileSize: number; override?: boolean }): Promise<{ context: LlamaContext; gpuAttemptFailed: boolean; actualLength: number; attemptedGpuLayers: number }> {
     const deviceInfo = await hardwareService.getDeviceInfo();
     // Pass model size + free RAM so iOS Metal offload is capped to what fits (the
     // uncapped 99-layer offload was overflowing Metal → SIGSEGV on memory-tight devices).
@@ -203,7 +207,7 @@ class LLMService {
     // 4GB iPhone 12 mid-generation). The scale-down logic below never fired because
     // it only ever RAISES context; do the floor here so the first load is safe.
     const deviceCtxCap = getMaxContextForDevice(deviceInfo.totalMemory);
-    const safeCtx = Math.min(params.ctxLen, deviceCtxCap);
+    const safeCtx = params.override ? params.ctxLen : Math.min(params.ctxLen, deviceCtxCap);
     if (safeCtx !== params.ctxLen) logger.log(`[LLM] context capped for ${(deviceInfo.totalMemory / BYTES_PER_GB).toFixed(1)}GB RAM: ${params.ctxLen} → ${safeCtx}`);
     const initial = { ...await initContextWithFallback(resolvedBaseParams, safeCtx, safeGpuLayers), attemptedGpuLayers: safeGpuLayers };
     const modelMax = getModelMaxContext(initial.context);
