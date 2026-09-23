@@ -22,6 +22,7 @@ import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useSettingsSections } from '../components/settings/sectionRegistry';
 import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
 import { HidePromotionsToggle } from '../components/settings/HidePromotionsToggle';
+import { DebugLoggingToggle, ReleaseDebugLogsButton } from '../components/settings/DebugLoggingToggle';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -57,6 +58,7 @@ export const SettingsScreen: React.FC = () => {
   const completeChecklistStep = useAppStore((s) => s.completeChecklistStep);
   const resetChecklist = useAppStore((s) => s.resetChecklist);
   const [showDebugLogs, setShowDebugLogs] = useState(false);
+  const debugLogging = useAppStore((s) => s.settings.debugLogging);
   const deviceInfo = useAppStore((s) => s.deviceInfo);
   // Hidden once the user dismisses it, or once Pro is active (the upsell makes no
   // sense to a paid user). hasRegisteredPro only flips true after RC verification
@@ -187,6 +189,7 @@ export const SettingsScreen: React.FC = () => {
 
         {/* Hide promotions — suppresses all PRO and Desktop promos app-wide. */}
         <HidePromotionsToggle trigger={focusTrigger} />
+        <DebugLoggingToggle trigger={focusTrigger} />
 
         {/* Navigation Items */}
         <AttachStep index={5} fill>
@@ -379,8 +382,14 @@ export const SettingsScreen: React.FC = () => {
           </AnimatedEntry>
         )}
 
+        {/* Release builds with debug logging on get the log viewer (dev builds
+            have the full dev group above). */}
+        <ReleaseDebugLogsButton trigger={focusTrigger} onOpen={() => setShowDebugLogs(true)} />
+
         <MadeWithLove />
-        {__DEV__ && <DebugLogsScreen visible={showDebugLogs} onClose={() => setShowDebugLogs(false)} />}
+        {(__DEV__ || debugLogging) && (
+          <DebugLogsScreen visible={showDebugLogs} onClose={() => setShowDebugLogs(false)} />
+        )}
       </ScrollView>
     </SafeAreaView>
   );

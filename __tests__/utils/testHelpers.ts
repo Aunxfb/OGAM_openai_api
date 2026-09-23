@@ -80,6 +80,7 @@ export const resetStores = (): void => {
       liteRTTopP: 0.9,
       liteRTMaxTokens: 4096,
       hidePromotions: false,
+      debugLogging: false,
     },
     downloadedImageModels: [],
     activeImageModelId: null,

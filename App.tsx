@@ -34,9 +34,11 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
-// Dev-only: mirror logger output into the in-app Debug Logs viewer. The whole block
-// is behind __DEV__, so release builds keep main's no-op logger (zero logging cost).
-if (__DEV__) {
+// Mirror logger output into the in-app Debug Logs viewer + on-device file sink.
+// Dev builds capture unconditionally; release builds capture only when the
+// user opts in via the persisted `debugLogging` setting (default off — zero
+// logging cost and no log file otherwise).
+{
   const fmt = (a: unknown): string => {
     if (a instanceof Error) return `${a.name}: ${a.message}`;
     if (typeof a === 'string') return a;
@@ -45,18 +47,27 @@ if (__DEV__) {
   const base = { log: logger.log, warn: logger.warn, error: logger.error };
   const tap = (level: 'log' | 'warn' | 'error') => (...args: unknown[]) => {
     base[level](...args);
+    let capture = __DEV__;
+    if (!capture) {
+      try {
+        capture = useAppStore.getState().settings.debugLogging === true;
+      } catch { capture = false; }
+    }
+    if (!capture) return;
     const message = args.map(fmt).join(' ');
     try {
       useDebugLogsStore.getState().addLog({ timestamp: Date.now(), level, message });
     } catch { /* never break logging */ }
     // Persist to the on-device file sink so traces can be pulled over the cable
     // (RN 0.83 console logs don't reach Metro stdout or syslog). See debugLogFile.ts.
-    try { appendDebugLine(level, message); } catch { /* never break logging */ }
+    try {
+      initDebugLogFile();
+      appendDebugLine(level, message);
+    } catch { /* never break logging */ }
   };
   logger.log = tap('log');
   logger.warn = tap('warn');
   logger.error = tap('error');
-  initDebugLogFile();
 }
 
 const ensureRemoteServerStoreHydrated = async () => {

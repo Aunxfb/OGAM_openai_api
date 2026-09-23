@@ -926,6 +926,7 @@ describe('ModelSettingsScreen', () => {
           liteRTTopP: undefined as any,
           liteRTMaxTokens: undefined as any,
           hidePromotions: undefined as any,
+          debugLogging: undefined as any,
         },
       });
 

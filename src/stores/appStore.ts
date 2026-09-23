@@ -3,8 +3,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceInfo, DownloadedModel, ModelRecommendation, ONNXImageModel, ImageGenerationMode, AutoDetectMethod, CacheType, InferenceBackend, INFERENCE_BACKENDS, LiteRTBackend, GeneratedImage } from '../types';
-import { MAX_TOKEN_LIMIT } from '../constants';
 import { createLocalServerSlice, mergePersistedLocalServer, type LocalServerSlice } from './localServerSlice';
+import {
+  migrateEnabledTools,
+  migrateBoostedContext,
+  migrateTokenCeiling,
+  clampTokenSettings,
+} from './settingsMigrations';
 
 function isUnknownLike(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -91,6 +96,10 @@ type AppSettings = {
   /** Hide all PRO and Off Grid AI Desktop promotions (banners, cards, upsell
    *  panels, entry rows, and inline desktop links). Off by default. */
   hidePromotions: boolean;
+  /** Capture logger output to the on-device log file + Debug Logs viewer,
+   *  including in release builds (where __DEV__ is false). Off by default —
+   *  no logging cost and no log file until the user opts in. */
+  debugLogging: boolean;
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -244,47 +253,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liteRTTopP: 0.9,
   liteRTMaxTokens: 4096,
   hidePromotions: false,
+  debugLogging: false,
 };
 
-function migrateEnabledTools(merged: any): void {
-  if (merged.settings?.enabledTools && !merged.settings.enabledTools.includes('search_knowledge_base')) {
-    merged.settings = { ...merged.settings, enabledTools: [...merged.settings.enabledTools, 'search_knowledge_base'] };
-  }
-}
-
-// The removed MCP context auto-boost pinned context to 32768 (and maxTokens to 8192 /
-// liteRTMaxTokens to 32768) on MCP enable and never restored it, causing OOM crashes
-// and tanked tok/s on flagship devices. Reset anyone left at the boost ceiling back to
-// the device-safe defaults. Idempotent: once reset, the values no longer match.
-const MCP_BOOST_CTX_CEILING = 32768;
-const MCP_BOOST_MAX_OUTPUT_TOKENS = 8192;
-function migrateBoostedContext(merged: any): void {
-  const s = merged.settings;
-  if (!s) return;
-  // Match the EXACT values the boost wrote, not `>=`. The boost set these to
-  // precise constants; a `>=` test also clobbers a user who legitimately chose a
-  // large context/maxTokens above the default, which this one-time migration must
-  // not touch.
-  if (s.contextLength === MCP_BOOST_CTX_CEILING) {
-    s.contextLength = DEFAULT_SETTINGS.contextLength;
-    // maxTokens was raised alongside contextLength by the boost; only reset it when the
-    // boost's exact value is present, so a legitimately-large user maxTokens isn't clobbered.
-    if (s.maxTokens === MCP_BOOST_MAX_OUTPUT_TOKENS) s.maxTokens = DEFAULT_SETTINGS.maxTokens;
-  }
-  if (s.liteRTMaxTokens === MCP_BOOST_CTX_CEILING) {
-    s.liteRTMaxTokens = DEFAULT_SETTINGS.liteRTMaxTokens;
-  }
-}
-// Token sliders are hard-capped at MAX_TOKEN_LIMIT (128K). Clamp any persisted
-// value left above the ceiling (e.g. from when model metadata drove the max)
-// back down. Idempotent: values at or below the ceiling are untouched.
-function migrateTokenCeiling(merged: any): void {
-  const s = merged.settings;
-  if (!s) return;
-  for (const key of ['maxTokens', 'contextLength', 'liteRTMaxTokens'] as const) {
-    if (typeof s[key] === 'number' && s[key] > MAX_TOKEN_LIMIT) s[key] = MAX_TOKEN_LIMIT;
-  }
-}
 function migratePersistedState(persistedState: any, currentState: AppState): AppState {
   const merged = {
     ...currentState,
@@ -314,25 +285,13 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
   if (merged.checklistDismissed && merged.onboardingChecklist &&
     !Object.values(merged.onboardingChecklist).every(Boolean)) merged.checklistDismissed = false;
   migrateEnabledTools(merged);
-  migrateBoostedContext(merged);
+  migrateBoostedContext(merged, DEFAULT_SETTINGS);
   migrateTokenCeiling(merged);
   return merged as AppState;
 }
 
 export const selectIsLiteRT = (state: AppState): boolean =>
   state.downloadedModels.find(m => m.id === state.activeModelId)?.engine === 'litert';
-
-// Single choke point for the 128K slider ceiling: any live settings write above
-// MAX_TOKEN_LIMIT is clamped, so sliders and loaders never see an over-ceiling
-// value. Values at/below the ceiling (and non-numbers) pass through untouched.
-function clampTokenSettings(patch: Partial<AppSettings>): Partial<AppSettings> {
-  const clamped = { ...patch };
-  for (const key of ['maxTokens', 'contextLength', 'liteRTMaxTokens'] as const) {
-    const v = clamped[key];
-    if (typeof v === 'number' && v > MAX_TOKEN_LIMIT) clamped[key] = MAX_TOKEN_LIMIT;
-  }
-  return clamped;
-}
 
 export const useAppStore = create<AppState>()(
   persist(

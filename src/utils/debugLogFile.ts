@@ -12,8 +12,9 @@
  *     --domain-type appDataContainer --domain-identifier <bundleId> \
  *     --source Documents/offgrid-debug.log --destination /tmp/offgrid-debug.log
  *
- * It is entirely behind __DEV__ (wired in App.tsx) — release builds never touch it.
- * Writes are buffered + flushed on an interval so high-frequency logging never
+ * It captures unconditionally on dev builds; on release builds only when the
+ * user opts in via the persisted `debugLogging` setting (default off — see
+ * the App.tsx logger tap). Writes are buffered + flushed on an interval so high-frequency logging never
  * blocks the JS thread, and the file is rotated at a size cap so it can't grow
  * unbounded. Logging must NEVER throw, so every FS call is best-effort.
  */
@@ -80,9 +81,11 @@ function scheduleFlush(): void {
   timer = setTimeout(() => { flush().catch(() => {}); }, FLUSH_MS);
 }
 
-/** Begin capturing to the file. Idempotent; no-op outside __DEV__. */
+/** Begin capturing to the file. Idempotent; call it whenever capture turns on
+ *  (dev builds capture unconditionally, release builds only with the persisted
+ *  `debugLogging` setting — see the App.tsx logger tap). */
 export function initDebugLogFile(): void {
-  if (!__DEV__ || enabled) return;
+  if (enabled) return;
   enabled = true;
   // Append (don't wipe) a session marker so a prior session's tail survives a
   // reload/crash for post-mortem, while the size cap keeps it bounded.
