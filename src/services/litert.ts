@@ -12,6 +12,7 @@
 
 import { NativeModules, NativeEventEmitter, EmitterSubscription } from 'react-native';
 import logger from '../utils/logger';
+import { useAppStore } from '../stores/appStore';
 import { summarizeSession, runCompaction } from './liteRTCompaction';
 
 const TAG = '[LiteRTService]';
@@ -122,11 +123,16 @@ class LiteRTService {
       this.activeBackend = actualBackend as LiteRTBackend;
       this.loaded = true;
       this.modelSupportsAudio = supportsAudio;
+      // Publish the EFFECTIVE context (user setting, possibly clamped by
+      // native for RAM) so sliders cap at what this loaded session supports —
+      // mirrors llm.ts publishing the llama metadata context.
+      useAppStore.getState().setModelMaxContext(this.configuredMaxTokens);
       logger.log(TAG, `loadModel — loaded on ${this.activeBackend}`);
     } catch (e) {
       this.loaded = false;
       this.activeBackend = null;
       this.modelSupportsAudio = false;
+      useAppStore.getState().setModelMaxContext(null);
       logger.log(TAG, `loadModel — failed: ${String(e)}`);
       throw e;
     }
@@ -513,6 +519,7 @@ class LiteRTService {
       this.loaded = false;
       this.modelSupportsAudio = false;
       this.activeBackend = null;
+      useAppStore.getState().setModelMaxContext(null);
     }
   }
 
