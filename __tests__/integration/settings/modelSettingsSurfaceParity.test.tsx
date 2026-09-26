@@ -134,4 +134,33 @@ describe('model settings surface parity', () => {
     fireEvent.press(modelSettings.getByTestId('tts-accordion'));
     expect(modelSettings.getByTestId('shared-tts-settings')).toBeTruthy();
   });
+
+  it('never collapses the llama sliders to a tiny trained context', () => {
+    useAppStore.getState().setModelMaxContext(512); // small trained ctx
+    const modelSettings = renderModelSettings();
+    fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
+
+    // The model's trained context (512) must not cap the sliders below the
+    // usable 4096 floor (the "snap to 512" bug).
+    expect(
+      modelSettings.getByTestId('llama-max-tokens-slider').props.maximumValue,
+    ).toBeGreaterThanOrEqual(4096);
+    expect(
+      modelSettings.getByTestId('llama-context-length-slider').props.maximumValue,
+    ).toBeGreaterThanOrEqual(4096);
+  });
+
+  it('grants the full 128K ceiling when Unsafe Context is on', () => {
+    useAppStore.getState().setModelMaxContext(512);
+    useAppStore.getState().updateSettings({ unsafeContext: true });
+    const modelSettings = renderModelSettings();
+    fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
+
+    expect(
+      modelSettings.getByTestId('llama-max-tokens-slider').props.maximumValue,
+    ).toBe(131072);
+    expect(
+      modelSettings.getByTestId('llama-context-length-slider').props.maximumValue,
+    ).toBe(131072);
+  });
 });

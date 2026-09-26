@@ -2,6 +2,10 @@ import { DEFAULT_SETTINGS } from '../stores/appStore';
 import { selectIsLiteRT, useAppStore } from '../stores';
 import { MAX_TOKEN_LIMIT } from '../constants';
 
+/** Slider cap never collapses below this, even for models with a tiny trained
+ *  context — a small trained ctx isn't a hard output limit. */
+const CONTEXT_CAP_FLOOR = 4096;
+
 export interface NumericSettingModel {
   key: string;
   label: string;
@@ -41,8 +45,21 @@ export function useTextGenerationSettings() {
   const topP = settings.topP ?? DEFAULT_SETTINGS.topP;
   const repeatPenalty =
     settings.repeatPenalty ?? DEFAULT_SETTINGS.repeatPenalty;
+  const unsafeContext = settings.unsafeContext === true;
+  // The sliders cap at the loaded model's TRAINED context (modelMaxContext) —
+  // but only when that is a LARGER bound than the user could already reach.
+  // A small trained ctx (e.g. 512) is not a hard output limit: llama.rn serves
+  // over-trained contexts via KV/ctx-shift, and capping the sliders at it
+  // made them "snap" to 512 the moment such a model loaded. Never collapse
+  // below a usable 4096 floor. Unsafe Context mode skips the trained cap
+  // entirely and uses the full 128K ceiling.
   const llamaModelLimit = Math.min(
-    modelMaxContext ?? Math.max(maxTokens, contextLength, 512),
+    unsafeContext
+      ? MAX_TOKEN_LIMIT
+      : Math.max(
+          modelMaxContext ?? Math.max(maxTokens, contextLength, 512),
+          CONTEXT_CAP_FLOOR,
+        ),
     MAX_TOKEN_LIMIT,
   );
 
@@ -52,7 +69,12 @@ export function useTextGenerationSettings() {
     settings.liteRTMaxTokens ?? DEFAULT_SETTINGS.liteRTMaxTokens;
   const liteRTTopP = settings.liteRTTopP ?? DEFAULT_SETTINGS.liteRTTopP;
   const liteRTModelLimit = Math.min(
-    modelMaxContext ?? Math.max(liteRTMaxTokens, 512),
+    unsafeContext
+      ? MAX_TOKEN_LIMIT
+      : Math.max(
+          modelMaxContext ?? Math.max(liteRTMaxTokens, 512),
+          CONTEXT_CAP_FLOOR,
+        ),
     MAX_TOKEN_LIMIT,
   );
 
