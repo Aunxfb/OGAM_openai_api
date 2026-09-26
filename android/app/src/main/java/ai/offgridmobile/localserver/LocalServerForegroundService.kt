@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -16,12 +17,15 @@ import ai.offgridmobile.R
 /**
  * Keeps the local server alive with the screen off: an ongoing notification
  * (tap opens the app's Local Server screen via the launch extra) plus a
- * PARTIAL_WAKE_LOCK (CPU on, screen may sleep). Stopped with the server —
- * never lingering.
+ * PARTIAL_WAKE_LOCK (CPU on, screen may sleep) AND a WifiLock so the radio
+ * stays up for inbound LAN connections (a CPU-only wakelock lets the wifi
+ * chip power-save, which drops LAN clients once the screen is off). Both are
+ * held for the service's lifetime and released on destroy — never lingering.
  */
 class LocalServerForegroundService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -32,7 +36,25 @@ class LocalServerForegroundService : Service() {
         // CPU stays on so serving survives screen-off; the screen may sleep.
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OffGrid:LocalServer").apply {
-            acquire(12 * 60 * 60 * 1000L)
+            acquire() // indefinite — released in onDestroy
+        }
+        // Keep the wifi radio awake for inbound connections. HIGH_PERF is
+        // deprecated on API 34+; LOW_LATENCY (Q+) is the modern equivalent
+        // (wifi stays out of power-save). Falls back to FULL on older devices.
+        try {
+            val wifi = getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = wifi.createWifiLock(mode, "OffGrid:LocalServer").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (e: Exception) {
+            // Radio lock unavailable (e.g. airplane mode) — the CPU wakelock
+            // still holds; serving resumes when wifi is reachable.
         }
     }
 
@@ -49,7 +71,9 @@ class LocalServerForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        try { wakeLock?.release() } catch (_: Exception) {}
+        try { wifiLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
+        wifiLock = null
+        try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
         wakeLock = null
         super.onDestroy()
     }
@@ -78,7 +102,8 @@ class LocalServerForegroundService : Service() {
         }
     }
 
-    private fun ensureChannel() {        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(
